@@ -1,0 +1,326 @@
+import { useNavigate, useParams } from 'react-router-dom';
+import { useApp } from '@/context/AppContext';
+import { Button } from '@/components/ui/button';
+import { Printer, ArrowLeft } from 'lucide-react';
+import { motion } from 'framer-motion';
+
+// Helper for Thai Baht Text
+const thaiBahtText = (amount) => {
+    if (!amount) return 'ศูนย์บาทถ้วน';
+    const textNum = ['ศูนย์', 'หนึ่ง', 'สอง', 'สาม', 'สี่', 'ห้า', 'หก', 'เจ็ด', 'แปด', 'เก้า'];
+    const textDigit = ['', 'สิบ', 'ร้อย', 'พัน', 'หมื่น', 'แสน', 'ล้าน'];
+
+    let bahtText = '';
+    const parts = String(parseFloat(amount).toFixed(2)).split('.');
+    let intNum = parts[0];
+    let decNum = parts[1];
+
+    if (parseInt(intNum) === 0) {
+        bahtText = 'ศูนย์บาท';
+    } else {
+        const len = intNum.length;
+        for (let i = 0; i < len; i++) {
+            const digit = parseInt(intNum.charAt(i));
+            const pos = len - i - 1;
+            if (digit !== 0) {
+                if (pos === 0 && digit === 1 && len > 1) {
+                    bahtText += 'เอ็ด';
+                } else if (pos === 1 && digit === 2) {
+                    bahtText += 'ยี่';
+                } else if (pos === 1 && digit === 1) {
+                    // Do nothing
+                } else {
+                    bahtText += textNum[digit];
+                }
+                bahtText += textDigit[pos];
+            }
+        }
+        bahtText += 'บาท';
+    }
+
+    if (parseInt(decNum) === 0) {
+        bahtText += 'ถ้วน';
+    } else {
+        const len = decNum.length;
+        for (let i = 0; i < len; i++) {
+            const digit = parseInt(decNum.charAt(i));
+            const pos = len - i - 1;
+            if (digit !== 0) {
+                if (pos === 0 && digit === 1 && len > 1) {
+                    bahtText += 'เอ็ด';
+                } else if (pos === 1 && digit === 2) {
+                    bahtText += 'ยี่';
+                } else if (pos === 1 && digit === 1) {
+                    // Do nothing
+                } else {
+                    bahtText += textNum[digit];
+                }
+                if (i === 0) bahtText += 'สิบ';
+            }
+        }
+        bahtText += 'สตางค์';
+    }
+    return bahtText;
+};
+
+// Single Receipt Component
+const SingleReceipt = ({ bill, tenant, settings, isLast }) => {
+    const rent = tenant?.rent || settings.defaultRent;
+    const waterTotal = bill.water * settings.waterRate;
+    const elecTotal = bill.electric * settings.electricRate;
+    const commonFee = 150;
+    const netTotal = rent + waterTotal + elecTotal + commonFee;
+
+    const today = new Date();
+    const printDate = `${today.getDate().toString().padStart(2, '0')}/${(today.getMonth() + 1).toString().padStart(2, '0')}/${(today.getFullYear() + 543).toString().slice(-2)} ${today.getHours().toString().padStart(2, '0')}:${today.getMinutes().toString().padStart(2, '0')}`;
+    const serviceStart = `01/${(today.getMonth()).toString().padStart(2, '0')}/${(today.getFullYear() + 543).toString().slice(-2)} 00:00`;
+    const serviceEnd = `30/${(today.getMonth()).toString().padStart(2, '0')}/${(today.getFullYear() + 543).toString().slice(-2)} 23:59`;
+
+    return (
+        <div className={`receipt-page bg-white p-10 ${!isLast ? 'page-break' : ''}`}>
+            {/* Header */}
+            <div className="flex justify-between items-start mb-6">
+                <div>
+                    <h1 className="text-lg font-bold mb-1">ตวงเงินแมนชั่น</h1>
+                    <p className="text-xs mb-0.5">23/43 ม.9 ต.คลองหนึ่ง อ.คลองหลวง จ.ปทุมธานี 12120</p>
+                    <p className="text-xs">โทร. 099-013-6999</p>
+                </div>
+                <div className="text-right">
+                    <h2 className="text-base font-bold mb-0.5">ใบเสร็จรับเงิน/ใบกำกับภาษี</h2>
+                    <p className="text-xs">หน้าที่ 1/1</p>
+                </div>
+            </div>
+
+            {/* Customer Info */}
+            <div className="flex justify-between items-start mb-4">
+                <div className="w-1/2">
+                    <div className="text-sm space-y-1">
+                        <div className="flex gap-4">
+                            <span className="font-semibold">ชื่อ</span>
+                            <span>{tenant?.name || bill.name}</span>
+                        </div>
+                        <div className="flex gap-4">
+                            <span className="font-semibold">ที่อยู่</span>
+                            <span>-</span>
+                        </div>
+                    </div>
+                </div>
+                <div className="w-1/2">
+                    <div className="text-sm space-y-1 text-right">
+                        <div className="flex justify-end gap-8">
+                            <span className="font-semibold">เลขที่</span>
+                            <span>0000{bill.room}10</span>
+                        </div>
+                        <div className="flex justify-end gap-8">
+                            <span className="font-semibold">วันที่</span>
+                            <span>{printDate}</span>
+                        </div>
+                        <div className="flex justify-end gap-8">
+                            <span className="font-semibold">ห้อง</span>
+                            <span>{bill.room}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Service Period */}
+            <div className="mb-4 text-sm">
+                <span className="font-semibold mr-2">วันที่เริ่มคิดค่าบริการ</span>
+                <span>{serviceStart} - {serviceEnd}</span>
+            </div>
+
+            {/* Table */}
+            <table className="w-full border-collapse border border-black text-sm mb-0">
+                <thead>
+                    <tr className="border-b border-black">
+                        <th className="border-r border-black py-2 px-3 text-center font-semibold">ลำดับ</th>
+                        <th className="border-r border-black py-2 px-3 text-left font-semibold">รายการ</th>
+                        <th className="border-r border-black py-2 px-3 text-right font-semibold">จำนวน</th>
+                        <th className="border-r border-black py-2 px-3 text-right font-semibold">ราคา</th>
+                        <th className="border-r border-black py-2 px-3 text-right font-semibold">จำนวนเงิน</th>
+                        <th className="border-r border-black py-2 px-3 text-right font-semibold">ภาษี</th>
+                        <th className="py-2 px-3 text-right font-semibold">รวมเงิน</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {/* Room Rent */}
+                    <tr className="border-b border-black">
+                        <td className="border-r border-black py-2 px-3 text-center align-top">1</td>
+                        <td className="border-r border-black py-2 px-3 align-top">
+                            <div className="font-semibold">ค่าห้อง</div>
+                            <div className="text-xs text-gray-600 mt-0.5">{serviceStart} - {serviceEnd}</div>
+                        </td>
+                        <td className="border-r border-black py-2 px-3 text-right align-top">1</td>
+                        <td className="border-r border-black py-2 px-3 text-right align-top">{rent.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                        <td className="border-r border-black py-2 px-3 text-right align-top">{rent.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                        <td className="border-r border-black py-2 px-3 text-right align-top">0.00</td>
+                        <td className="py-2 px-3 text-right align-top">{rent.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                    </tr>
+                    {/* Electric */}
+                    <tr className="border-b border-black">
+                        <td className="border-r border-black py-2 px-3 text-center align-top">2</td>
+                        <td className="border-r border-black py-2 px-3 align-top">
+                            <div className="font-semibold">ค่าไฟ</div>
+                            <div className="text-xs text-gray-600 mt-0.5">01256 - {(1256 + bill.electric)} &nbsp; {serviceStart} - {serviceEnd}</div>
+                        </td>
+                        <td className="border-r border-black py-2 px-3 text-right align-top">{bill.electric}</td>
+                        <td className="border-r border-black py-2 px-3 text-right align-top">-</td>
+                        <td className="border-r border-black py-2 px-3 text-right align-top">{elecTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                        <td className="border-r border-black py-2 px-3 text-right align-top">0.00</td>
+                        <td className="py-2 px-3 text-right align-top">{elecTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                    </tr>
+                    {/* Water */}
+                    <tr className="border-b border-black">
+                        <td className="border-r border-black py-2 px-3 text-center align-top">3</td>
+                        <td className="border-r border-black py-2 px-3 align-top">
+                            <div className="font-semibold">ค่าน้ำ</div>
+                            <div className="text-xs text-gray-600 mt-0.5">00103 - {(103 + bill.water)} &nbsp; {serviceStart} - {serviceEnd}</div>
+                        </td>
+                        <td className="border-r border-black py-2 px-3 text-right align-top">{bill.water}</td>
+                        <td className="border-r border-black py-2 px-3 text-right align-top">-</td>
+                        <td className="border-r border-black py-2 px-3 text-right align-top">{waterTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                        <td className="border-r border-black py-2 px-3 text-right align-top">0.00</td>
+                        <td className="py-2 px-3 text-right align-top">{waterTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                    </tr>
+                    {/* Common Fee */}
+                    <tr className="border-b border-black">
+                        <td className="border-r border-black py-2 px-3 text-center align-top">4</td>
+                        <td className="border-r border-black py-2 px-3 align-top">
+                            <div className="font-semibold">ค่าส่วนกลาง</div>
+                        </td>
+                        <td className="border-r border-black py-2 px-3 text-right align-top">1</td>
+                        <td className="border-r border-black py-2 px-3 text-right align-top">{commonFee.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                        <td className="border-r border-black py-2 px-3 text-right align-top">{commonFee.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                        <td className="border-r border-black py-2 px-3 text-right align-top">0.00</td>
+                        <td className="py-2 px-3 text-right align-top">{commonFee.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                    </tr>
+                    {/* Total */}
+                    <tr>
+                        <td colSpan="2" className="border-r border-black py-2 px-3 font-semibold">
+                            <div className="flex items-center justify-between">
+                                <span>ยอดเงินสุทธิ</span>
+                                <span className="text-xs italic text-gray-600 mx-4">* {thaiBahtText(netTotal)} *</span>
+                            </div>
+                        </td>
+                        <td className="border-r border-black py-2 px-3"></td>
+                        <td className="border-r border-black py-2 px-3"></td>
+                        <td className="border-r border-black py-2 px-3 text-right font-semibold">{netTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                        <td className="border-r border-black py-2 px-3 text-right font-semibold">0.00</td>
+                        <td className="py-2 px-3 text-right font-semibold">{netTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            {/* Signatures */}
+            <div className="grid grid-cols-3 gap-16 mt-16 text-sm">
+                <div className="text-center">
+                    <div className="border-b border-black w-full mx-auto mb-2"></div>
+                    <p className="font-semibold">ผู้จัดทำ</p>
+                </div>
+                <div className="text-center">
+                    <div className="border-b border-black w-full mx-auto mb-2"></div>
+                    <p className="font-semibold">ผู้อนุมัติ</p>
+                </div>
+                <div className="text-center">
+                    <div className="border-b border-black w-full mx-auto mb-2"></div>
+                    <p className="font-semibold">ผู้รับเงิน</p>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+export default function BulkReceipts() {
+    const { buildingId } = useParams();
+    const navigate = useNavigate();
+    const { billing, tenants, buildings, settings } = useApp();
+
+    // Filter bills by building
+    const buildingBills = billing.filter(b => b.buildingId === parseInt(buildingId));
+    const building = buildings.find(b => b.id === parseInt(buildingId));
+
+    if (!building || buildingBills.length === 0) {
+        return (
+            <div className="flex flex-col items-center justify-center h-screen bg-slate-50">
+                <h2 className="text-2xl font-bold text-slate-800">ไม่พบข้อมูลใบเสร็จ</h2>
+                <p className="text-slate-500 mt-2">ตึกนี้ยังไม่มีรายการบิล</p>
+                <Button onClick={() => navigate(-1)} className="mt-4">ย้อนกลับ</Button>
+            </div>
+        );
+    }
+
+    return (
+        <div className="min-h-screen bg-gray-100 py-6 px-4 font-sans">
+            {/* Toolbar */}
+            <motion.div
+                initial={{ opacity: 0, y: -20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="max-w-[210mm] mx-auto mb-6 flex justify-between items-center print:hidden"
+            >
+                <div className="flex items-center gap-3">
+                    <Button variant="ghost" onClick={() => navigate(-1)} className="gap-2">
+                        <ArrowLeft size={16} /> ย้อนกลับ
+                    </Button>
+                    <div>
+                        <h1 className="text-lg font-bold text-slate-800">{building.name}</h1>
+                        <p className="text-xs text-slate-500">{buildingBills.length} ใบเสร็จ</p>
+                    </div>
+                </div>
+                <Button onClick={() => window.print()} className="gap-2 bg-indigo-600 hover:bg-indigo-700">
+                    <Printer size={16} /> พิมพ์ทั้งหมด ({buildingBills.length} ใบ)
+                </Button>
+            </motion.div>
+
+            <style>
+                {`
+                    @media print {
+                        @page { 
+                            size: A4 landscape; 
+                            margin: 15mm; 
+                        }
+                        * {
+                            background: white !important;
+                            -webkit-print-color-adjust: exact !important;
+                            print-color-adjust: exact !important;
+                        }
+                        body { 
+                            background: white !important; 
+                            margin: 0; 
+                            padding: 0; 
+                        }
+                        .receipt-page {
+                            background: white !important;
+                        }
+                        .page-break { 
+                            page-break-after: always; 
+                        }
+                        .no-print { 
+                            display: none; 
+                        }
+                    }
+                    @media screen {
+                        .receipt-page {
+                            box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
+                        }
+                    }
+                `}
+            </style>
+
+            {/* All Receipts */}
+            <div className="space-y-6 print:space-y-0 max-w-[240mm] mx-auto">
+                {buildingBills.map((bill, index) => {
+                    const tenant = tenants.find(t => t.room === bill.room && t.buildingId === bill.buildingId);
+                    return (
+                        <SingleReceipt
+                            key={bill.room}
+                            bill={bill}
+                            tenant={tenant}
+                            settings={settings}
+                            isLast={index === buildingBills.length - 1}
+                        />
+                    );
+                })}
+            </div>
+        </div>
+    );
+}

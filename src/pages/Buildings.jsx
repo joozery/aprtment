@@ -1,0 +1,216 @@
+import { useState } from 'react';
+import { useApp } from '@/context/AppContext';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Building2, Plus, Pencil, Trash2, Home } from 'lucide-react';
+import { motion } from 'framer-motion';
+
+export default function Buildings() {
+    const { buildings, addBuilding, updateBuilding, deleteBuilding } = useApp();
+    const [isDialogOpen, setIsDialogOpen] = useState(false);
+    const [editingBuilding, setEditingBuilding] = useState(null);
+    const [formData, setFormData] = useState({
+        name: '',
+        floors: 4,
+        roomsPerFloor: 8,
+        defaultRent: 4500
+    });
+
+    const handleSubmit = (e) => {
+        e.preventDefault();
+        if (editingBuilding) {
+            updateBuilding(editingBuilding.id, formData);
+        } else {
+            addBuilding(formData);
+        }
+        resetForm();
+    };
+
+    const resetForm = () => {
+        setFormData({ name: '', floors: 4, roomsPerFloor: 8, defaultRent: 4500 });
+        setEditingBuilding(null);
+        setIsDialogOpen(false);
+    };
+
+    const handleEdit = (building) => {
+        setEditingBuilding(building);
+        setFormData({
+            name: building.name,
+            floors: building.floors,
+            roomsPerFloor: building.roomsPerFloor,
+            defaultRent: building.defaultRent
+        });
+        setIsDialogOpen(true);
+    };
+
+    const handleDelete = (id) => {
+        if (confirm('คุณแน่ใจหรือไม่ว่าต้องการลบตึกนี้? ข้อมูลห้องพักและผู้เช่าจะยังคงอยู่')) {
+            deleteBuilding(id);
+        }
+    };
+
+    return (
+        <div className="p-6 space-y-6">
+            {/* Header */}
+            <div className="flex justify-between items-center">
+                <div>
+                    <h2 className="text-2xl font-bold text-slate-800">จัดการตึก</h2>
+                    <p className="text-slate-500 mt-1">เพิ่ม แก้ไข หรือลบตึกในระบบ</p>
+                </div>
+                <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                    <DialogTrigger asChild>
+                        <Button className="bg-indigo-600 hover:bg-indigo-700 text-white">
+                            <Plus size={16} className="mr-2" />
+                            เพิ่มตึกใหม่
+                        </Button>
+                    </DialogTrigger>
+                    <DialogContent className="sm:max-w-md">
+                        <form onSubmit={handleSubmit}>
+                            <DialogHeader>
+                                <DialogTitle>{editingBuilding ? 'แก้ไขตึก' : 'เพิ่มตึกใหม่'}</DialogTitle>
+                                <DialogDescription>
+                                    กรอกข้อมูลตึกที่ต้องการ{editingBuilding ? 'แก้ไข' : 'เพิ่ม'}
+                                </DialogDescription>
+                            </DialogHeader>
+                            <div className="grid gap-4 py-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="name">ชื่อตึก</Label>
+                                    <Input
+                                        id="name"
+                                        value={formData.name}
+                                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                                        placeholder="เช่น ตึก 1, อาคาร A"
+                                        required
+                                    />
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <Label htmlFor="floors">จำนวนชั้น</Label>
+                                        <Input
+                                            id="floors"
+                                            type="number"
+                                            min="1"
+                                            value={formData.floors}
+                                            onChange={(e) => setFormData({ ...formData, floors: parseInt(e.target.value) })}
+                                            required
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="roomsPerFloor">ห้องต่อชั้น</Label>
+                                        <Input
+                                            id="roomsPerFloor"
+                                            type="number"
+                                            min="1"
+                                            value={formData.roomsPerFloor}
+                                            onChange={(e) => setFormData({ ...formData, roomsPerFloor: parseInt(e.target.value) })}
+                                            required
+                                        />
+                                    </div>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="defaultRent">ค่าเช่าเริ่มต้น (บาท/เดือน)</Label>
+                                    <Input
+                                        id="defaultRent"
+                                        type="number"
+                                        min="0"
+                                        step="100"
+                                        value={formData.defaultRent}
+                                        onChange={(e) => setFormData({ ...formData, defaultRent: parseInt(e.target.value) })}
+                                        required
+                                    />
+                                </div>
+                            </div>
+                            <DialogFooter>
+                                <Button type="button" variant="outline" onClick={resetForm}>
+                                    ยกเลิก
+                                </Button>
+                                <Button type="submit" className="bg-indigo-600 hover:bg-indigo-700">
+                                    {editingBuilding ? 'บันทึก' : 'เพิ่มตึก'}
+                                </Button>
+                            </DialogFooter>
+                        </form>
+                    </DialogContent>
+                </Dialog>
+            </div>
+
+            {/* Buildings Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {buildings.map((building, index) => (
+                    <motion.div
+                        key={building.id}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: index * 0.1 }}
+                    >
+                        <Card className="hover:shadow-lg transition-shadow">
+                            <CardHeader className="pb-3">
+                                <div className="flex items-start justify-between">
+                                    <div className="flex items-center gap-3">
+                                        <div className="h-12 w-12 rounded-xl bg-indigo-100 flex items-center justify-center">
+                                            <Building2 className="text-indigo-600" size={24} />
+                                        </div>
+                                        <div>
+                                            <CardTitle className="text-lg">{building.name}</CardTitle>
+                                            <CardDescription className="text-xs mt-1">
+                                                {building.floors * building.roomsPerFloor} ห้องทั้งหมด
+                                            </CardDescription>
+                                        </div>
+                                    </div>
+                                    <div className="flex gap-1">
+                                        <Button
+                                            size="icon"
+                                            variant="ghost"
+                                            className="h-8 w-8"
+                                            onClick={() => handleEdit(building)}
+                                        >
+                                            <Pencil size={14} className="text-slate-600" />
+                                        </Button>
+                                        <Button
+                                            size="icon"
+                                            variant="ghost"
+                                            className="h-8 w-8"
+                                            onClick={() => handleDelete(building.id)}
+                                        >
+                                            <Trash2 size={14} className="text-rose-600" />
+                                        </Button>
+                                    </div>
+                                </div>
+                            </CardHeader>
+                            <CardContent className="space-y-3">
+                                <div className="grid grid-cols-2 gap-3 text-sm">
+                                    <div className="bg-slate-50 p-3 rounded-lg">
+                                        <p className="text-slate-500 text-xs mb-1">จำนวนชั้น</p>
+                                        <p className="font-bold text-slate-800">{building.floors} ชั้น</p>
+                                    </div>
+                                    <div className="bg-slate-50 p-3 rounded-lg">
+                                        <p className="text-slate-500 text-xs mb-1">ห้องต่อชั้น</p>
+                                        <p className="font-bold text-slate-800">{building.roomsPerFloor} ห้อง</p>
+                                    </div>
+                                </div>
+                                <div className="bg-indigo-50 p-3 rounded-lg border border-indigo-100">
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-xs text-indigo-700 font-medium">ค่าเช่าเริ่มต้น</span>
+                                        <span className="font-bold text-indigo-900">
+                                            ฿{building.defaultRent.toLocaleString()}
+                                        </span>
+                                    </div>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    </motion.div>
+                ))}
+            </div>
+
+            {buildings.length === 0 && (
+                <div className="text-center py-12">
+                    <Home className="mx-auto text-slate-300" size={64} />
+                    <h3 className="mt-4 text-lg font-semibold text-slate-800">ยังไม่มีตึกในระบบ</h3>
+                    <p className="text-slate-500 mt-2">เริ่มต้นโดยการเพิ่มตึกแรกของคุณ</p>
+                </div>
+            )}
+        </div>
+    );
+}
