@@ -25,14 +25,14 @@ export const AppProvider = ({ children }) => {
     };
 
     const initialTenants = [
-        { id: 1, room: '101', buildingId: 1, name: 'สุรศักดิ์ ใจกล้า', status: 'ปกติ', date: '01 ม.ค. 2024', expiry: '01 ม.ค. 2025', rent: 4500, avatar: 'SJ', lastWaterMeter: 1250, lastElectricMeter: 4500 },
-        { id: 2, room: '102', buildingId: 1, name: 'กานดา รักงาน', status: 'ปกติ', date: '15 ก.พ. 2024', expiry: '15 ก.พ. 2025', rent: 4500, avatar: 'KR', lastWaterMeter: 1100, lastElectricMeter: 3200 },
-        { id: 3, room: '201', buildingId: 1, name: 'พรชัย ทองคำ', status: 'ค้างชำระ', date: '10 ธ.ค. 2023', expiry: '10 ธ.ค. 2024', rent: 5000, avatar: 'PT', lastWaterMeter: 1420, lastElectricMeter: 5100 },
+        { id: 1, room: '1101', buildingId: 1, name: 'สุรศักดิ์ ใจกล้า', status: 'ปกติ', date: '01 ม.ค. 2024', expiry: '01 ม.ค. 2025', rent: 4500, avatar: 'SJ', lastWaterMeter: 1250, lastElectricMeter: 4500 },
+        { id: 2, room: '1102', buildingId: 1, name: 'กานดา รักงาน', status: 'ปกติ', date: '15 ก.พ. 2024', expiry: '15 ก.พ. 2025', rent: 4500, avatar: 'KR', lastWaterMeter: 1100, lastElectricMeter: 3200 },
+        { id: 3, room: '1201', buildingId: 1, name: 'พรชัย ทองคำ', status: 'ค้างชำระ', date: '10 ธ.ค. 2023', expiry: '10 ธ.ค. 2024', rent: 5000, avatar: 'PT', lastWaterMeter: 1420, lastElectricMeter: 5100 },
     ];
 
     const initialMaintenance = [
-        { id: 1, room: '102', issue: 'ก๊อกน้ำรั่วในห้องน้ำ', category: 'ประปา', status: 'In Progress', date: '25 มิ.ย. 67', priority: 'High', images: 2 },
-        { id: 2, room: '405', issue: 'แอร์ไม่เย็น มีเสียงดัง', category: 'เครื่องใช้ไฟฟ้า', status: 'Pending', date: '26 มิ.ย. 67', priority: 'Medium', images: 3 },
+        { id: 1, room: '1102', issue: 'ก๊อกน้ำรั่วในห้องน้ำ', category: 'ประปา', status: 'In Progress', date: '25 มิ.ย. 67', priority: 'High', images: 2 },
+        { id: 2, room: '1405', issue: 'แอร์ไม่เย็น มีเสียงดัง', category: 'เครื่องใช้ไฟฟ้า', status: 'Pending', date: '26 มิ.ย. 67', priority: 'Medium', images: 3 },
     ];
 
     // State Management
@@ -59,8 +59,8 @@ export const AppProvider = ({ children }) => {
     const [billing, setBilling] = useState(() => {
         const saved = localStorage.getItem('smart_billing');
         return saved ? JSON.parse(saved) : [
-            { room: '101', buildingId: 1, name: 'สุรศักดิ์ ใจกล้า', water: 15, electric: 120, total: 5210, status: 'รอการชำระ', lastPay: '-' },
-            { room: '102', buildingId: 1, name: 'กานดา รักงาน', water: 12, electric: 145, total: 5320, status: 'ชำระแล้ว', lastPay: '25 มิ.ย. 67' },
+            { room: '1101', buildingId: 1, name: 'สุรศักดิ์ ใจกล้า', water: 15, electric: 120, total: 5210, status: 'รอการชำระ', lastPay: '-' },
+            { room: '1102', buildingId: 1, name: 'กานดา รักงาน', water: 12, electric: 145, total: 5320, status: 'ชำระแล้ว', lastPay: '25 มิ.ย. 67' },
         ];
     });
 
@@ -182,32 +182,40 @@ export const AppProvider = ({ children }) => {
         ]
     });
 
-    const getRoomInfo = (roomNum) => {
-        const floor = parseInt(roomNum.substring(0, 1));
-        const roomIndex = parseInt(roomNum.substring(1));
-        if (isNaN(floor) || isNaN(roomIndex)) return null;
+    const getRoomInfo = (roomNum, buildingContext = null) => {
+        // Find building context if not provided
+        if (!buildingContext) {
+            // we assume first digit is building id
+            const bId = parseInt(roomNum.substring(0, 1));
+            buildingContext = buildings.find(b => b.id === bId);
+            if (!buildingContext) buildingContext = buildings[0]; // fallback
+        }
 
-        // Basic validation based on config
-        if (floor < 1 || floor > roomConfig.totalFloors) return null;
-        if (roomIndex < 1 || roomIndex > roomConfig.roomsPerFloor) return null;
+        // skip 0, 1 for floor. 4 digit means index 1 is floor.
+        const floor = parseInt(roomNum.substring(1, 2));
 
         const tenant = tenants.find(t => t.room === roomNum.toString());
         return {
             number: roomNum,
             isOccupied: !!tenant,
             tenant: tenant || null,
-            floor
+            floor,
+            buildingId: buildingContext.id,
+            rent: buildingContext.defaultRent
         };
     };
 
     const getAllRooms = () => {
         const rooms = [];
-        for (let f = 1; f <= roomConfig.totalFloors; f++) {
-            for (let r = 1; r <= roomConfig.roomsPerFloor; r++) {
-                const roomNum = `${f}${r.toString().padStart(2, '0')}`;
-                rooms.push(getRoomInfo(roomNum));
+        buildings.forEach((building) => {
+            const buildingPrefix = building.id.toString();
+            for (let f = 1; f <= building.floors; f++) {
+                for (let r = 1; r <= building.roomsPerFloor; r++) {
+                    const roomNum = `${buildingPrefix}${f}${r.toString().padStart(2, '0')}`;
+                    rooms.push(getRoomInfo(roomNum, building));
+                }
             }
-        }
+        });
         return rooms;
     };
 
@@ -235,16 +243,19 @@ export const AppProvider = ({ children }) => {
         if (!building) return [];
 
         const rooms = [];
+        const buildingPrefix = building.id.toString();
+
         for (let f = 1; f <= building.floors; f++) {
             for (let r = 1; r <= building.roomsPerFloor; r++) {
-                const roomNum = `${f}${r.toString().padStart(2, '0')}`;
+                const roomNum = `${buildingPrefix}${f}${r.toString().padStart(2, '0')}`;
                 const tenant = tenants.find(t => t.room === roomNum && t.buildingId === buildingId);
                 rooms.push({
                     number: roomNum,
                     buildingId,
                     isOccupied: !!tenant,
                     tenant: tenant || null,
-                    floor: f
+                    floor: f,
+                    rent: building.defaultRent // use building specific rent
                 });
             }
         }

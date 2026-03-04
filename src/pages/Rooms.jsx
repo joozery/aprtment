@@ -59,9 +59,8 @@ export default function Rooms() {
     const allRooms = allRoomsRaw.map(r => ({
         ...r,
         status: r.isOccupied ? 'occupied' : 'vacant',
-        type: parseInt(r.number.substring(1)) <= 4 ? 'Standard' : 'Deluxe',
-        size: parseInt(r.number.substring(1)) <= 4 ? '24' : '32',
-        rent: parseInt(r.number.substring(1)) <= 4 ? 4500 : 5500,
+        type: 'Standard',
+        size: '24',
         features: ['แอร์', 'เครื่องทำน้ำอุ่น', 'เฟอร์นิเจอร์']
     }));
 
@@ -201,8 +200,8 @@ export default function Rooms() {
                                 key={status}
                                 onClick={() => setFilterStatus(status)}
                                 className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${filterStatus === status
-                                        ? 'bg-white text-slate-900 shadow-sm'
-                                        : 'text-slate-500 hover:text-slate-700'
+                                    ? 'bg-white text-slate-900 shadow-sm'
+                                    : 'text-slate-500 hover:text-slate-700'
                                     }`}
                             >
                                 {status === 'all' ? 'ทั้งหมด' : status === 'vacant' ? 'ว่าง' : 'มีคนอยู่'}
@@ -260,8 +259,8 @@ export default function Rooms() {
                                             transition={{ delay: idx * 0.05 }}
                                         >
                                             <Card className={`group border-none shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden cursor-pointer h-full relative ${room.status === 'vacant'
-                                                    ? 'bg-white hover:ring-2 hover:ring-emerald-400/50'
-                                                    : 'bg-white hover:ring-2 hover:ring-indigo-400/50'
+                                                ? 'bg-white hover:ring-2 hover:ring-emerald-400/50'
+                                                : 'bg-white hover:ring-2 hover:ring-indigo-400/50'
                                                 }`}>
                                                 {/* Status Indicator Stripe */}
                                                 <div className={`absolute top-0 left-0 w-1.5 h-full ${room.status === 'vacant' ? 'bg-emerald-400' : 'bg-indigo-500'
