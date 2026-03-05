@@ -13,7 +13,8 @@ import {
     Download,
     Calendar,
     ShieldCheck,
-    Settings
+    Settings,
+    Edit3
 } from 'lucide-react';
 import {
     Table,
@@ -36,9 +37,15 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 import { useApp } from '@/context/AppContext';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 const StatusBadge = ({ status }) => {
     const configs = {
@@ -71,21 +78,47 @@ import { useNavigate } from 'react-router-dom';
 // ... StatusBadge component ...
 
 export default function Tenants() {
-    const { tenants, addTenant, removeTenant, getRoomInfo } = useApp();
+    const { tenants, addTenant, removeTenant, updateTenant, getRoomInfo, buildings, getRoomsByBuilding } = useApp();
     const navigate = useNavigate();
     const [search, setSearch] = useState('');
+    const [filterStatus, setFilterStatus] = useState('all');
     const [isAddOpen, setIsAddOpen] = useState(false);
+    const [isEditMode, setIsEditMode] = useState(false);
     const [newTenant, setNewTenant] = useState({ room: '', name: '', rent: 4500, status: 'ปกติ' });
     const [selectedTenant, setSelectedTenant] = useState(null);
     const [isDetailOpen, setIsDetailOpen] = useState(false);
     const [isHistoryOpen, setIsHistoryOpen] = useState(false);
 
-    const handleAdd = () => {
+    // New state for selecting building when adding tenant
+    const [filterBuildingId, setFilterBuildingId] = useState('');
+
+    useEffect(() => {
+        if (!filterBuildingId && buildings.length > 0) {
+            setFilterBuildingId(buildings[0].id.toString());
+        }
+    }, [buildings, filterBuildingId]);
+
+    const availableRooms = filterBuildingId
+        ? getRoomsByBuilding(filterBuildingId).filter(r => !r.isOccupied)
+        : [];
+
+    const handleSave = async () => {
         if (!newTenant.room || !newTenant.name) return;
+
+        if (isEditMode) {
+            const res = await updateTenant(newTenant.id, newTenant);
+            if (res && res.success) {
+                setIsAddOpen(false);
+                setNewTenant({ room: '', name: '', rent: 4500, status: 'ปกติ' });
+            } else {
+                alert(res?.error || 'เกิดข้อผิดพลาดในการแก้ไขข้อมูลผู้เช่า');
+            }
+            return;
+        }
 
         const roomInfo = getRoomInfo(newTenant.room);
         if (!roomInfo) {
-            alert('หมายเลขห้องไม่ถูกต้อง (กรุณาตรวจสอบชั้น 1-4, ห้อง 01-08)');
+            alert('หมายเลขห้องไม่ถูกต้อง');
             return;
         }
         if (roomInfo.isOccupied) {
@@ -93,19 +126,25 @@ export default function Tenants() {
             return;
         }
 
-        addTenant({
+        const res = await addTenant({
             ...newTenant,
             date: new Date().toLocaleDateString('th-TH'),
             expiry: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toLocaleDateString('th-TH')
         });
-        setIsAddOpen(false);
-        setNewTenant({ room: '', name: '', rent: 4500, status: 'ปกติ' });
+
+        if (res && res.success) {
+            setIsAddOpen(false);
+            setNewTenant({ room: '', name: '', rent: 4500, status: 'ปกติ' });
+        } else {
+            alert(res?.error || 'เกิดข้อผิดพลาดในการลงทะเบียนผู้เช่า');
+        }
     };
 
-    const filteredTenants = tenants.filter(t =>
-        t.name.toLowerCase().includes(search.toLowerCase()) ||
-        t.room.includes(search)
-    );
+    const filteredTenants = tenants.filter(t => {
+        const matchesSearch = t.name.toLowerCase().includes(search.toLowerCase()) || t.room.includes(search);
+        const matchesStatus = filterStatus === 'all' || t.status === filterStatus;
+        return matchesSearch && matchesStatus;
+    });
 
     return (
         <div className="space-y-10 pb-10">
@@ -118,10 +157,6 @@ export default function Tenants() {
                     </p>
                 </div>
                 <div className="flex gap-4">
-                    <Button onClick={() => navigate('/templates')} variant="outline" className="h-9 px-4 rounded-xl border-slate-200 bg-white font-bold text-slate-600 premium-shadow group text-sm">
-                        <Settings size={14} className="mr-2 opacity-50 group-hover:opacity-100 transition-opacity" />
-                        จัดการเทมเพลต
-                    </Button>
                     <Button variant="outline" className="h-9 px-4 rounded-xl border-slate-200 bg-white font-bold text-slate-600 premium-shadow group text-sm">
                         <Download size={14} className="mr-2 opacity-50 group-hover:opacity-100 transition-opacity" />
                         ส่งออกรายชื่อ
@@ -129,7 +164,10 @@ export default function Tenants() {
 
                     <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
                         <DialogTrigger asChild>
-                            <Button className="h-9 px-6 rounded-xl bg-primary text-white font-bold premium-shadow hover:scale-[1.02] active:scale-95 transition-all shadow-xl shadow-indigo-100 text-sm">
+                            <Button
+                                onClick={() => { setIsEditMode(false); setNewTenant({ room: '', name: '', rent: 4500, status: 'ปกติ' }); }}
+                                className="h-9 px-6 rounded-xl bg-primary text-white font-bold premium-shadow hover:scale-[1.02] active:scale-95 transition-all shadow-xl shadow-indigo-100 text-sm"
+                            >
                                 <UserPlus size={16} className="mr-2" />
                                 ลงทะเบียนผู้เช่าใหม่
                             </Button>
@@ -140,14 +178,65 @@ export default function Tenants() {
                                 <DialogDescription className="text-slate-400 font-medium">กรอกข้อมูลเพื่อเปิดสัญญากับผู้เช่ารายใหม่</DialogDescription>
                             </DialogHeader>
                             <div className="grid gap-6 py-4">
+                                {!isEditMode && (
+                                    <div className="space-y-2">
+                                        <Label className="font-bold text-slate-700">เลือกตึก (เพื่อดูห้องว่าง)</Label>
+                                        <Select
+                                            value={filterBuildingId}
+                                            onValueChange={(val) => {
+                                                setFilterBuildingId(val);
+                                                setNewTenant({ ...newTenant, room: '' });
+                                            }}
+                                        >
+                                            <SelectTrigger className="h-12 rounded-xl bg-slate-50 border-none">
+                                                <SelectValue placeholder="เลือกตึก" />
+                                            </SelectTrigger>
+                                            <SelectContent className="rounded-xl border-none shadow-lg">
+                                                {buildings.map(b => (
+                                                    <SelectItem key={b.id} value={b.id.toString()}>{b.name}</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                )}
                                 <div className="space-y-2">
                                     <Label className="font-bold text-slate-700">เลขห้อง</Label>
-                                    <Input
-                                        value={newTenant.room}
-                                        onChange={(e) => setNewTenant({ ...newTenant, room: e.target.value })}
-                                        placeholder="เช่น 101"
-                                        className="h-12 rounded-xl bg-slate-50 border-none"
-                                    />
+                                    {isEditMode ? (
+                                        <Input
+                                            value={newTenant.room}
+                                            disabled
+                                            className="h-12 rounded-xl bg-slate-50 border-none disabled:opacity-50"
+                                        />
+                                    ) : (
+                                        <Select
+                                            value={newTenant.room}
+                                            onValueChange={(val) => {
+                                                const roomInfo = getRoomInfo(val);
+                                                setNewTenant({
+                                                    ...newTenant,
+                                                    room: val,
+                                                    rent: roomInfo ? roomInfo.rent : 4500
+                                                });
+                                            }}
+                                        >
+                                            <SelectTrigger className="h-12 rounded-xl bg-slate-50 border-none">
+                                                <SelectValue placeholder="เลือกห้องว่าง" />
+                                            </SelectTrigger>
+                                            <SelectContent className="rounded-xl border-none shadow-lg max-h-60">
+                                                {availableRooms.length > 0 ? (
+                                                    availableRooms.map(r => (
+                                                        <SelectItem key={r.number} value={r.number.toString()}>
+                                                            {r.number} (ชั้น {r.floor}) - ฿{r.rent?.toLocaleString() || '4,500'}
+                                                        </SelectItem>
+                                                    ))
+                                                ) : (
+                                                    <div className="py-4 text-center text-sm font-medium text-slate-400">
+                                                        ไม่มีห้องว่างในตึกนี้
+                                                    </div>
+                                                )}
+                                            </SelectContent>
+                                        </Select>
+                                    )}
                                 </div>
                                 <div className="space-y-2">
                                     <Label className="font-bold text-slate-700">ชื่อ-นามสกุล</Label>
@@ -169,8 +258,8 @@ export default function Tenants() {
                                 </div>
                             </div>
                             <DialogFooter>
-                                <Button onClick={handleAdd} className="w-full h-14 bg-primary text-white font-bold text-lg rounded-2xl shadow-xl shadow-indigo-100">
-                                    บันทึกและส่งสัญญา
+                                <Button onClick={handleSave} className="w-full h-14 bg-primary text-white font-bold text-lg rounded-2xl shadow-xl shadow-indigo-100">
+                                    {isEditMode ? 'บันทึกการแก้ไข' : 'บันทึกข้อมูลผู้เช่า'}
                                 </Button>
                             </DialogFooter>
                         </DialogContent>
@@ -205,45 +294,6 @@ export default function Tenants() {
                                 <div className="p-4 border border-slate-100 rounded-xl space-y-1">
                                     <Label className="text-xs text-slate-400">สถานะสัญญา</Label>
                                     <div className="flex"><StatusBadge status={selectedTenant.status} /></div>
-                                </div>
-                            </div>
-
-                            <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
-                                <Label className="text-xs text-slate-400 font-bold uppercase tracking-widest px-2 mb-2 block">ตัวอย่างสัญญาเช่า</Label>
-                                <div className="bg-white p-6 shadow-sm border border-slate-100 rounded-lg text-[10px] leading-relaxed text-slate-600 font-mono h-[250px] overflow-y-auto">
-                                    <div className="text-center font-bold text-sm mb-4 border-b pb-2">สัญญาเช่าห้องพักหอพักตวงเงินแมนชั่น</div>
-                                    <p className="mb-2">สัญญาฉบับนี้ทำขึ้นเมื่อวันที่ <span className="font-bold text-slate-800 underline">{selectedTenant.date}</span></p>
-                                    <p className="mb-2">ระหว่าง <span className="font-bold">หอพักตวงเงินแมนชั่น</span> (ผู้ให้เช่า) และ <span className="font-bold text-slate-800 underline">{selectedTenant.name}</span> (ผู้เช่า)</p>
-                                    <p className="mb-4">คู่สัญญาทั้งสองฝ่ายตกลงทำสัญญาเช่าห้องพักหมายเลข <span className="font-bold text-slate-800 underline">{selectedTenant.room}</span> อัตราค่าเช่าเดือนละ <span className="font-bold text-slate-800 underline">{selectedTenant.rent.toLocaleString()}</span> บาท โดยมีกำหนดระยะเวลาสัญญา <span className="font-bold text-slate-800 underline">12 เดือน</span> นับตั้งแต่วันที่ {selectedTenant.date} จนถึง {selectedTenant.expiry}</p>
-                                    <div className="mb-2 font-bold">เงื่อนไขการเช่า:</div>
-                                    <ul className="list-disc pl-4 space-y-1 mb-4">
-                                        <li>ผู้เช่าต้องชำระค่าเช่าภายในวันที่ 5 ของทุกเดือน</li>
-                                        <li>ห้ามเลี้ยงสัตว์ทุกชนิดภายในห้องพัก</li>
-                                        <li>ห้ามส่งเสียงดังรบกวนผู้เช่าท่านอื่นหลังเวลา 22.00 น.</li>
-                                        <li>หากผิดสัญญา ผู้ให้เช่ามีสิทธิ์บอกเลิกสัญญาได้ทันที</li>
-                                    </ul>
-                                    <div className="flex justify-between mt-8 pt-4 border-t border-dashed border-slate-300">
-                                        <div className="text-center">
-                                            <div className="h-8 border-b border-slate-300 w-24 mb-1"></div>
-                                            (ผู้ให้เช่า)
-                                        </div>
-                                        <div className="text-center">
-                                            <div className="h-8 border-b border-slate-300 w-24 mb-1"></div>
-                                            (ผู้เช่า)
-                                        </div>
-                                    </div>
-                                </div>
-                                <div className="flex justify-end gap-3 mt-3">
-                                    <Button
-                                        onClick={() => navigate(`/contract/${selectedTenant.room}`)}
-                                        size="sm"
-                                        className="rounded-lg h-9 bg-slate-900 text-white font-bold shadow-md hover:bg-slate-800"
-                                    >
-                                        <FileText size={14} className="mr-2" /> เปิดดูสัญญาฉบับเต็ม
-                                    </Button>
-                                    <Button size="sm" variant="outline" className="rounded-lg h-9 bg-white border-slate-200 hover:bg-slate-50 text-slate-600">
-                                        <Download size={14} className="mr-2" /> ดาวน์โหลด PDF
-                                    </Button>
                                 </div>
                             </div>
                         </div>
@@ -313,10 +363,29 @@ export default function Tenants() {
                                 className="pl-9 h-9 bg-white border-slate-200 rounded-xl focus-visible:ring-2 focus-visible:ring-primary/10 transition-all font-medium text-slate-700 text-sm"
                             />
                         </div>
-                        <Button variant="outline" className="h-9 px-4 rounded-xl border-slate-200 bg-white text-slate-600 font-bold group text-sm">
-                            <Filter size={14} className="mr-2 opacity-50 group-hover:opacity-100 transition-opacity" />
-                            กรอง
-                        </Button>
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="outline" className="h-9 px-4 rounded-xl border-slate-200 bg-white text-slate-600 font-bold group text-sm">
+                                    <Filter size={14} className="mr-2 opacity-50 group-hover:opacity-100 transition-opacity" />
+                                    กรอง: {filterStatus === 'all' ? 'สถานะทั้งหมด' : filterStatus}
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-48 rounded-xl shadow-lg border-slate-100">
+                                <DropdownMenuItem onClick={() => setFilterStatus('all')} className="font-medium cursor-pointer">
+                                    สถานะทั้งหมด
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem onClick={() => setFilterStatus('ปกติ')} className="text-emerald-600 font-medium cursor-pointer">
+                                    ปกติ
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => setFilterStatus('ค้างชำระ')} className="text-rose-600 font-medium cursor-pointer">
+                                    ค้างชำระ
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => setFilterStatus('ใกล้หมดสัญญา')} className="text-amber-600 font-medium cursor-pointer">
+                                    ใกล้หมดสัญญา
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
                     </div>
                 </CardHeader>
 
@@ -393,7 +462,7 @@ export default function Tenants() {
                                                         className="gap-3 py-3 px-4 rounded-xl cursor-pointer hover:bg-slate-50"
                                                     >
                                                         <div className="bg-blue-50 p-2 rounded-lg text-blue-500"><FileText size={16} /></div>
-                                                        <span className="font-bold text-slate-700">ดูรายละเอียด/สัญญา</span>
+                                                        <span className="font-bold text-slate-700">ดูรายละเอียดผู้เช่า</span>
                                                     </DropdownMenuItem>
                                                     <DropdownMenuItem
                                                         onClick={() => { setSelectedTenant(tenant); setIsHistoryOpen(true); }}
@@ -401,6 +470,17 @@ export default function Tenants() {
                                                     >
                                                         <div className="bg-emerald-50 p-2 rounded-lg text-emerald-500"><History size={16} /></div>
                                                         <span className="font-bold text-slate-700">ประวัติการชำระเงิน</span>
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem
+                                                        onClick={() => {
+                                                            setNewTenant(tenant);
+                                                            setIsEditMode(true);
+                                                            setIsAddOpen(true);
+                                                        }}
+                                                        className="gap-3 py-3 px-4 rounded-xl cursor-pointer hover:bg-slate-50"
+                                                    >
+                                                        <div className="bg-amber-50 p-2 rounded-lg text-amber-500"><Edit3 size={16} /></div>
+                                                        <span className="font-bold text-slate-700">แก้ไขข้อมูลผู้เช่า</span>
                                                     </DropdownMenuItem>
                                                     <DropdownMenuSeparator className="my-2 bg-slate-50" />
                                                     <DropdownMenuItem

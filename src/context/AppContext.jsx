@@ -1,4 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import axios from 'axios';
+
+const API_URL = 'http://localhost:5001/api';
 
 const AppContext = createContext();
 
@@ -13,9 +16,13 @@ export const AppProvider = ({ children }) => {
     ];
 
     const initialSettings = {
-        waterRate: 20,      // บาท/หน่วย
-        electricRate: 7,    // บาท/หน่วย
+        waterRate: 35,      // บาท/หน่วย
+        electricRate: 11,   // บาท/หน่วย
+        waterMin: 200,      // ขั้นต่ำ
+        electricMin: 200,   // ขั้นต่ำ
+        serviceFee: 200,    // ค่าบริการรายเดือน
         defaultRent: 4500,  // บาทต่อเดือน
+        promptpayPhone: '', // เบอร์พร้อมเพย์
     };
 
     // Configuration (Legacy - will be replaced by buildings)
@@ -36,33 +43,18 @@ export const AppProvider = ({ children }) => {
     ];
 
     // State Management
-    const [buildings, setBuildings] = useState(() => {
-        const saved = localStorage.getItem('smart_buildings');
-        return saved ? JSON.parse(saved) : initialBuildings;
-    });
-
+    const [buildings, setBuildings] = useState([]);
     const [settings, setSettings] = useState(() => {
         const saved = localStorage.getItem('smart_settings');
         return saved ? JSON.parse(saved) : initialSettings;
     });
-
-    const [tenants, setTenants] = useState(() => {
-        const saved = localStorage.getItem('smart_tenants');
-        return saved ? JSON.parse(saved) : initialTenants;
-    });
-
+    const [tenants, setTenants] = useState([]);
     const [maintenance, setMaintenance] = useState(() => {
         const saved = localStorage.getItem('smart_maintenance');
         return saved ? JSON.parse(saved) : initialMaintenance;
     });
 
-    const [billing, setBilling] = useState(() => {
-        const saved = localStorage.getItem('smart_billing');
-        return saved ? JSON.parse(saved) : [
-            { room: '1101', buildingId: 1, name: 'สุรศักดิ์ ใจกล้า', water: 15, electric: 120, total: 5210, status: 'รอการชำระ', lastPay: '-' },
-            { room: '1102', buildingId: 1, name: 'กานดา รักงาน', water: 12, electric: 145, total: 5320, status: 'ชำระแล้ว', lastPay: '25 มิ.ย. 67' },
-        ];
-    });
+    const [billing, setBilling] = useState([]);
 
     const [incomeHistory, setIncomeHistory] = useState(() => {
         const saved = localStorage.getItem('smart_income_history');
@@ -81,17 +73,40 @@ export const AppProvider = ({ children }) => {
         return saved ? JSON.parse(saved) : { water: {}, electric: {} };
     });
 
+    // Fetch Data from API
     useEffect(() => {
-        localStorage.setItem('smart_buildings', JSON.stringify(buildings));
-    }, [buildings]);
+        const fetchData = async () => {
+            try {
+                const [buildingsRes, tenantsRes, billingRes, settingsRes] = await Promise.all([
+                    axios.get(`${API_URL}/buildings`),
+                    axios.get(`${API_URL}/tenants`),
+                    axios.get(`${API_URL}/billing`),
+                    axios.get(`${API_URL}/settings`),
+                ]);
+
+                // MAP _id to id to keep frontend logic from breaking for now
+                const formattedBuildings = buildingsRes.data.data.map(b => ({ ...b, id: b._id }));
+                const formattedTenants = tenantsRes.data.data.map(t => ({ ...t, id: t._id }));
+                const formattedBilling = billingRes.data.data.map(b => ({ ...b, id: b._id }));
+
+                setBuildings(formattedBuildings);
+                setTenants(formattedTenants);
+                setBilling(formattedBilling);
+
+                if (settingsRes.data.success) {
+                    const s = settingsRes.data.data;
+                    setSettings(prev => ({ ...prev, ...s }));
+                }
+            } catch (err) {
+                console.error('Error fetching data:', err);
+            }
+        };
+        fetchData();
+    }, []);
 
     useEffect(() => {
         localStorage.setItem('smart_settings', JSON.stringify(settings));
     }, [settings]);
-
-    useEffect(() => {
-        localStorage.setItem('smart_tenants', JSON.stringify(tenants));
-    }, [tenants]);
 
     useEffect(() => {
         localStorage.setItem('smart_maintenance', JSON.stringify(maintenance));
@@ -110,12 +125,40 @@ export const AppProvider = ({ children }) => {
     }, [meters]);
 
     // Actions
-    const addTenant = (tenant) => {
-        setTenants(prev => [...prev, { ...tenant, id: Date.now(), avatar: tenant.name.substring(0, 2).toUpperCase() }]);
+    const addTenant = async (tenant) => {
+        try {
+            const res = await axios.post(`${API_URL}/tenants`, tenant);
+            if (res.data.success) {
+                const newTenant = { ...res.data.data, id: res.data.data._id };
+                setTenants(prev => [...prev, newTenant]);
+                return { success: true };
+            }
+        } catch (err) {
+            console.error(err);
+            return { success: false, error: err.response?.data?.error || err.message };
+        }
     };
 
-    const removeTenant = (id) => {
-        setTenants(prev => prev.filter(t => t.id !== id));
+    const removeTenant = async (id) => {
+        try {
+            await axios.delete(`${API_URL}/tenants/${id}`);
+            setTenants(prev => prev.filter(t => t.id !== id));
+        } catch (err) {
+            console.error(err);
+        }
+    };
+
+    const updateTenant = async (id, data) => {
+        try {
+            const res = await axios.put(`${API_URL}/tenants/${id}`, data);
+            if (res.data.success) {
+                setTenants(prev => prev.map(t => t.id === id ? { ...t, ...res.data.data } : t));
+                return { success: true };
+            }
+        } catch (err) {
+            console.error(err);
+            return { success: false, error: err.response?.data?.error || err.message };
+        }
     };
 
     const updateMaintenanceStatus = (id, status) => {
@@ -130,16 +173,24 @@ export const AppProvider = ({ children }) => {
         setMaintenance(prev => prev.filter(m => m.id !== id));
     };
 
-    const calculateBill = (room, waterMeter, electricMeter) => {
+    const calculateBill = async (room, waterMeter, electricMeter, currentWater, currentElectric) => {
         const tenant = tenants.find(t => t.room === room);
         if (!tenant) return;
 
         // Use rates from settings
-        const waterUnit = settings.waterRate || 20;
-        const electricUnit = settings.electricRate || 7;
-        const waterPrice = waterMeter * waterUnit;
-        const electricPrice = electricMeter * electricUnit;
-        const total = (tenant.rent || 4500) + waterPrice + electricPrice;
+        const waterUnit = settings.waterRate || 35;
+        const electricUnit = settings.electricRate || 11;
+        const waterMin = settings.waterMin ?? 200;
+        const electricMin = settings.electricMin ?? 200;
+        const serviceFee = settings.serviceFee ?? 200;
+
+        const waterPriceRaw = waterMeter * waterUnit;
+        const electricPriceRaw = electricMeter * electricUnit;
+
+        const waterPrice = Math.max(waterPriceRaw, waterMin);
+        const electricPrice = Math.max(electricPriceRaw, electricMin);
+
+        const total = (tenant.rent || 4500) + waterPrice + electricPrice + serviceFee;
 
         // Mock Dates: 25th last month to 25th this month
         const today = new Date();
@@ -147,27 +198,72 @@ export const AppProvider = ({ children }) => {
         const thisMonth = new Date(today.getFullYear(), today.getMonth(), 25);
         const dateOptions = { day: 'numeric', month: 'short', year: '2-digit' };
 
-        const newBill = {
+        const newBillData = {
             room,
-            name: tenant.name,
             water: waterMeter,
             electric: electricMeter,
             total,
-            total,
             status: 'รอการชำระ',
-            lastPay: '-',
             dateStart: lastMonth.toLocaleDateString('th-TH', dateOptions),
-            dateEnd: thisMonth.toLocaleDateString('th-TH', dateOptions)
+            dateEnd: thisMonth.toLocaleDateString('th-TH', dateOptions),
+            currentWater,
+            currentElectric
         };
 
-        setBilling(prev => {
-            const filtered = prev.filter(b => b.room !== room);
-            return [newBill, ...filtered];
-        });
+        try {
+            const res = await axios.post(`${API_URL}/billing`, newBillData);
+            if (res.data.success) {
+                setBilling(prev => {
+                    const filtered = prev.filter(b => b.room !== room || b.status === 'ชำระแล้ว');
+                    const newEntry = { ...res.data.data, id: res.data.data._id };
+                    return [newEntry, ...filtered];
+                });
+                // Optimistically update tenant
+                if (currentWater !== undefined || currentElectric !== undefined) {
+                    setTenants(prev => prev.map(t => t.id === tenant.id ? {
+                        ...t,
+                        lastWaterMeter: currentWater !== undefined ? currentWater : t.lastWaterMeter,
+                        lastElectricMeter: currentElectric !== undefined ? currentElectric : t.lastElectricMeter
+                    } : t));
+                }
+            }
+        } catch (err) {
+            console.error(err);
+        }
     };
 
-    const payBill = (room) => {
-        setBilling(prev => prev.map(b => b.room === room ? { ...b, status: 'ชำระแล้ว', lastPay: new Date().toLocaleDateString('th-TH') } : b));
+    const payBill = async (room) => {
+        try {
+            const lastPay = new Date().toLocaleDateString('th-TH');
+            const res = await axios.put(`${API_URL}/billing/${room}/pay`, { lastPay });
+            if (res.data.success) {
+                setBilling(prev => prev.map(b => b.room === room && b.status !== 'ชำระแล้ว' ? { ...b, status: 'ชำระแล้ว', lastPay } : b));
+            }
+        } catch (err) {
+            console.error(err);
+        }
+    };
+
+    const updateBillStatus = async (id, newStatus) => {
+        try {
+            const res = await axios.put(`${API_URL}/billing/${id}`, { status: newStatus });
+            if (res.data.success) {
+                setBilling(prev => prev.map(b => (b.id === id || b._id === id) ? { ...b, status: newStatus } : b));
+            }
+        } catch (err) {
+            console.error(err);
+        }
+    };
+
+    const deleteBill = async (id) => {
+        try {
+            const res = await axios.delete(`${API_URL}/billing/${id}`);
+            if (res.data.success) {
+                setBilling(prev => prev.filter(b => b.id !== id && b._id !== id));
+            }
+        } catch (err) {
+            console.error(err);
+        }
     };
 
     // Helper Functions
@@ -185,9 +281,10 @@ export const AppProvider = ({ children }) => {
     const getRoomInfo = (roomNum, buildingContext = null) => {
         // Find building context if not provided
         if (!buildingContext) {
-            // we assume first digit is building id
-            const bId = parseInt(roomNum.substring(0, 1));
-            buildingContext = buildings.find(b => b.id === bId);
+            // we assume first digit is building index offset (1-based)
+            const bIndexStr = roomNum.substring(0, 1);
+            const bIndex = parseInt(bIndexStr) - 1;
+            buildingContext = buildings[bIndex];
             if (!buildingContext) buildingContext = buildings[0]; // fallback
         }
 
@@ -207,8 +304,8 @@ export const AppProvider = ({ children }) => {
 
     const getAllRooms = () => {
         const rooms = [];
-        buildings.forEach((building) => {
-            const buildingPrefix = building.id.toString();
+        buildings.forEach((building, index) => {
+            const buildingPrefix = (index + 1).toString();
             for (let f = 1; f <= building.floors; f++) {
                 for (let r = 1; r <= building.roomsPerFloor; r++) {
                     const roomNum = `${buildingPrefix}${f}${r.toString().padStart(2, '0')}`;
@@ -220,21 +317,45 @@ export const AppProvider = ({ children }) => {
     };
 
     // Building Management Functions
-    const addBuilding = (building) => {
-        setBuildings(prev => [...prev, { ...building, id: Date.now() }]);
+    const addBuilding = async (building) => {
+        try {
+            const res = await axios.post(`${API_URL}/buildings`, building);
+            if (res.data.success) {
+                setBuildings(prev => [...prev, { ...res.data.data, id: res.data.data._id }]);
+            }
+        } catch (e) {
+            console.error(e);
+        }
     };
 
-    const updateBuilding = (id, updates) => {
-        setBuildings(prev => prev.map(b => b.id === id ? { ...b, ...updates } : b));
+    const updateBuilding = async (id, updates) => {
+        try {
+            const res = await axios.put(`${API_URL}/buildings/${id}`, updates);
+            if (res.data.success) {
+                setBuildings(prev => prev.map(b => b.id === id ? { ...b, ...updates } : b));
+            }
+        } catch (e) {
+            console.error(e);
+        }
     };
 
-    const deleteBuilding = (id) => {
-        setBuildings(prev => prev.filter(b => b.id !== id));
+    const deleteBuilding = async (id) => {
+        try {
+            await axios.delete(`${API_URL}/buildings/${id}`);
+            setBuildings(prev => prev.filter(b => b.id !== id));
+        } catch (e) {
+            console.error(e);
+        }
     };
 
     // Settings Management
-    const updateSettings = (newSettings) => {
+    const updateSettings = async (newSettings) => {
         setSettings(prev => ({ ...prev, ...newSettings }));
+        try {
+            await axios.put(`${API_URL}/settings`, newSettings);
+        } catch (err) {
+            console.error('Error saving settings:', err);
+        }
     };
 
     // Get rooms by building
@@ -243,7 +364,8 @@ export const AppProvider = ({ children }) => {
         if (!building) return [];
 
         const rooms = [];
-        const buildingPrefix = building.id.toString();
+        const buildingIndex = buildings.findIndex(b => b.id === buildingId);
+        const buildingPrefix = (buildingIndex + 1).toString();
 
         for (let f = 1; f <= building.floors; f++) {
             for (let r = 1; r <= building.roomsPerFloor; r++) {
@@ -270,13 +392,13 @@ export const AppProvider = ({ children }) => {
             getRoomsByBuilding,
 
             // Tenants
-            tenants, addTenant, removeTenant,
+            tenants, addTenant, removeTenant, updateTenant,
 
             // Maintenance
             maintenance, updateMaintenanceStatus, addMaintenance, deleteMaintenance,
 
             // Billing
-            billing, calculateBill, payBill,
+            billing, calculateBill, payBill, updateBillStatus, deleteBill,
             meters, setMeters,
 
             // Reports

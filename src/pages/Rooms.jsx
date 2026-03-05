@@ -17,7 +17,8 @@ import {
     LayoutGrid,
     BedDouble,
     Bath,
-    Maximize
+    Maximize,
+    Calendar
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -38,22 +39,33 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useApp } from '@/context/AppContext';
 import { useNavigate } from 'react-router-dom';
 
 export default function Rooms() {
-    const { tenants, getAllRooms, getRoomsByBuilding, buildings } = useApp();
+    const { tenants, getAllRooms, getRoomsByBuilding, buildings, settings, meters, billing } = useApp();
     const navigate = useNavigate();
-    const [viewMode, setViewMode] = useState('grid');
+    const [viewMode, setViewMode] = useState('list');
     const [searchQuery, setSearchQuery] = useState('');
     const [filterStatus, setFilterStatus] = useState('all');
     const [selectedBuilding, setSelectedBuilding] = useState('all');
 
+    // Month Filter Setup
+    const getMonthLabel = (isoDate) => {
+        if (!isoDate) return '-';
+        return new Date(isoDate).toLocaleDateString('th-TH', { month: 'long', year: 'numeric' });
+    };
+    const uniqueMonths = [...new Set(billing.map(b => getMonthLabel(b.createdAt)))].filter(s => s !== '-').sort().reverse();
+    const [monthFilter, setMonthFilter] = useState('current');
+
+    const [currentPage, setCurrentPage] = useState(1);
+    const itemsPerPage = 20;
+
     // Get rooms based on selection
     const allRoomsRaw = selectedBuilding === 'all'
         ? getAllRooms()
-        : getRoomsByBuilding(parseInt(selectedBuilding));
+        : getRoomsByBuilding(selectedBuilding);
 
     // Enrich room data
     const allRooms = allRoomsRaw.map(r => ({
@@ -78,8 +90,19 @@ export default function Rooms() {
     const occupiedCount = allRooms.filter(r => r.status === 'occupied').length;
     const occupancyRate = totalRooms > 0 ? ((occupiedCount / totalRooms) * 100).toFixed(0) : 0;
 
-    // Group by floor for grid view
-    const roomsByFloor = filteredRooms.reduce((acc, room) => {
+    // Group by floor for grid view (only current page)
+    const totalPages = Math.ceil(filteredRooms.length / itemsPerPage) || 1;
+
+    // Ensure current page is valid when filtering changes
+    const validCurrentPage = Math.min(currentPage, totalPages);
+
+    // If currentPage was out of bounds due to filter change, update it (though useMemo/render usually catches it, it's safer to use the valid calculated one for slicing)
+    const currentRooms = useMemo(() => {
+        const start = (validCurrentPage - 1) * itemsPerPage;
+        return filteredRooms.slice(start, start + itemsPerPage);
+    }, [filteredRooms, validCurrentPage, itemsPerPage]);
+
+    const roomsByFloor = currentRooms.reduce((acc, room) => {
         const floor = room.floor;
         if (!acc[floor]) acc[floor] = [];
         acc[floor].push(room);
@@ -98,13 +121,13 @@ export default function Rooms() {
                     </p>
                 </div>
                 <div className="flex gap-3">
-                    <Button variant="outline" className="h-10 px-5 rounded-xl border-slate-200 bg-white font-bold text-slate-600 hover:bg-slate-50 shadow-sm">
+                    <Button
+                        variant="outline"
+                        onClick={() => navigate('/buildings')}
+                        className="h-10 px-5 rounded-xl border-slate-200 bg-white font-bold text-slate-600 hover:bg-slate-50 shadow-sm"
+                    >
                         <Layers size={16} className="mr-2 text-slate-400" />
                         จัดการโซน/ตึก
-                    </Button>
-                    <Button className="h-10 px-6 rounded-xl bg-indigo-600 text-white font-bold shadow-lg shadow-indigo-200 hover:bg-indigo-700 hover:scale-[1.02] transition-all">
-                        <Plus size={18} className="mr-2" />
-                        เพิ่มห้องพัก
                     </Button>
                 </div>
             </div>
@@ -172,12 +195,18 @@ export default function Rooms() {
                         <Input
                             placeholder="ค้นหาเลขห้อง, ชื่อผู้เช่า..."
                             value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
+                            onChange={(e) => {
+                                setSearchQuery(e.target.value);
+                                setCurrentPage(1);
+                            }}
                             className="pl-10 h-11 bg-slate-50 border-none rounded-xl font-medium focus-visible:ring-2 focus-visible:ring-indigo-100 transition-all"
                         />
                     </div>
 
-                    <Select value={selectedBuilding} onValueChange={setSelectedBuilding}>
+                    <Select value={selectedBuilding} onValueChange={(val) => {
+                        setSelectedBuilding(val);
+                        setCurrentPage(1);
+                    }}>
                         <SelectTrigger className="w-full sm:w-[180px] h-11 bg-slate-50 border-none rounded-xl font-bold text-slate-600">
                             <div className="flex items-center gap-2">
                                 <Building2 size={16} className="text-slate-400" />
@@ -191,6 +220,26 @@ export default function Rooms() {
                             ))}
                         </SelectContent>
                     </Select>
+
+                    {viewMode === 'list' && (
+                        <Select value={monthFilter} onValueChange={(val) => {
+                            setMonthFilter(val);
+                            setCurrentPage(1);
+                        }}>
+                            <SelectTrigger className="w-full sm:w-[180px] h-11 bg-slate-50 border-none rounded-xl font-bold text-slate-600">
+                                <div className="flex items-center gap-2">
+                                    <Calendar size={16} className="text-slate-400" />
+                                    <SelectValue placeholder="รอบบิล" />
+                                </div>
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="current">รอบปัจจุบัน (Draft)</SelectItem>
+                                {uniqueMonths.map(m => (
+                                    <SelectItem key={m} value={m}>{m}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    )}
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto">
@@ -198,7 +247,10 @@ export default function Rooms() {
                         {['all', 'vacant', 'occupied'].map((status) => (
                             <button
                                 key={status}
-                                onClick={() => setFilterStatus(status)}
+                                onClick={() => {
+                                    setFilterStatus(status);
+                                    setCurrentPage(1);
+                                }}
                                 className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${filterStatus === status
                                     ? 'bg-white text-slate-900 shadow-sm'
                                     : 'text-slate-500 hover:text-slate-700'
@@ -288,10 +340,7 @@ export default function Rooms() {
                                                                 </Button>
                                                             </DropdownMenuTrigger>
                                                             <DropdownMenuContent align="end" className="w-48 rounded-xl shadow-lg border-slate-100">
-                                                                <DropdownMenuLabel>ตั่วเลือก</DropdownMenuLabel>
-                                                                <DropdownMenuItem className="cursor-pointer">
-                                                                    <Eye size={14} className="mr-2" /> ดูรายละเอียด
-                                                                </DropdownMenuItem>
+                                                                <DropdownMenuLabel>ตัวเลือก</DropdownMenuLabel>
                                                                 {room.status === 'vacant' && (
                                                                     <DropdownMenuItem className="cursor-pointer text-indigo-600 focus:text-indigo-700" onClick={() => navigate('/tenants')}>
                                                                         <Plus size={14} className="mr-2" /> เพิ่มผู้เช่าใหม่
@@ -354,58 +403,135 @@ export default function Rooms() {
                                     <thead className="bg-slate-50 text-slate-500 font-bold uppercase text-xs tracking-wider">
                                         <tr>
                                             <th className="px-6 py-4">ห้อง</th>
-                                            <th className="px-6 py-4">ชั้น</th>
-                                            <th className="px-6 py-4">ประเภท/ขนาด</th>
-                                            <th className="px-6 py-4">สถานะ</th>
                                             <th className="px-6 py-4">ผู้เช่า</th>
-                                            <th className="px-6 py-4 text-right">ค่าเช่า</th>
+                                            <th className="px-6 py-4 text-right">ค่าห้อง</th>
+                                            <th className="px-6 py-4 text-right">ค่าไฟ</th>
+                                            <th className="px-6 py-4 text-right">ค่าน้ำ</th>
+                                            <th className="px-6 py-4 text-right">ค่าบริการ/อื่นๆ</th>
+                                            <th className="px-6 py-4 text-right">รวมทั้งหมด</th>
                                             <th className="px-6 py-4 text-center">จัดการ</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-50">
-                                        {filteredRooms.map((room) => (
-                                            <tr key={room.number} className="hover:bg-slate-50/60 transition-colors group">
-                                                <td className="px-6 py-4">
-                                                    <span className="font-bold text-slate-800 text-base">{room.number}</span>
-                                                </td>
-                                                <td className="px-6 py-4 font-medium text-slate-500">
-                                                    ชั้น {room.floor}
-                                                </td>
-                                                <td className="px-6 py-4">
-                                                    <div className="flex flex-col">
-                                                        <span className="font-bold text-slate-700">{room.type}</span>
-                                                        <span className="text-xs text-slate-400">{room.size} ตร.ม.</span>
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4">
-                                                    {room.status === 'vacant' ? (
-                                                        <Badge className="bg-emerald-50 text-emerald-600 border-none font-bold">ว่าง</Badge>
-                                                    ) : (
-                                                        <Badge className="bg-indigo-50 text-indigo-600 border-none font-bold">มีผู้เช่า</Badge>
-                                                    )}
-                                                </td>
-                                                <td className="px-6 py-4">
-                                                    {room.tenant ? (
-                                                        <div className="flex items-center gap-3">
-                                                            <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-600 border border-white shadow-sm">
-                                                                {room.tenant.avatar}
-                                                            </div>
-                                                            <span className="font-bold text-slate-700 text-sm">{room.tenant.name}</span>
+                                        {currentRooms.map((room) => {
+                                            let rent = room.tenant ? room.tenant.rent : 0;
+
+                                            // ดึงเรทจาก Settings
+                                            const waterUnitRate = settings?.waterRate || 35;
+                                            const electricUnitRate = settings?.electricRate || 11;
+                                            const waterMin = settings?.waterMin ?? 200;
+                                            const electricMin = settings?.electricMin ?? 200;
+                                            const serviceFee = settings?.serviceFee ?? 200;
+
+                                            let waterCost = 0;
+                                            let elecCost = 0;
+                                            let other = room.tenant ? serviceFee : 0;
+                                            let totalCost = rent + other;
+
+                                            if (room.tenant) {
+                                                if (monthFilter === 'current') {
+                                                    // คำนวณค่าน้ำล่าสุด
+                                                    const prevWater = room.tenant.lastWaterMeter || 0;
+                                                    const currWater = meters.water[room.number] !== undefined && meters.water[room.number] !== ''
+                                                        ? parseFloat(meters.water[room.number])
+                                                        : prevWater;
+                                                    const waterUnits = Math.max(0, currWater - prevWater);
+                                                    waterCost = Math.max(waterUnits * waterUnitRate, waterMin);
+
+                                                    // คำนวณค่าไฟล่าสุด
+                                                    const prevElec = room.tenant.lastElectricMeter || 0;
+                                                    const currElec = meters.electric[room.number] !== undefined && meters.electric[room.number] !== ''
+                                                        ? parseFloat(meters.electric[room.number])
+                                                        : prevElec;
+                                                    const elecUnits = Math.max(0, currElec - prevElec);
+                                                    elecCost = Math.max(elecUnits * electricUnitRate, electricMin);
+
+                                                    totalCost = rent + waterCost + elecCost + other;
+                                                } else {
+                                                    // ค้นหาบิลเก่าและใช้ค่านั้น
+                                                    const pastBill = billing.find(b => b.room === room.number && getMonthLabel(b.createdAt) === monthFilter);
+                                                    if (pastBill) {
+                                                        const billWaterUnits = pastBill.water || 0;
+                                                        const billElecUnits = pastBill.electric || 0;
+                                                        waterCost = Math.max(billWaterUnits * waterUnitRate, waterMin);
+                                                        elecCost = Math.max(billElecUnits * electricUnitRate, electricMin);
+                                                        // ใช้ total จากบิล
+                                                        totalCost = pastBill.total;
+                                                    } else {
+                                                        // หากในอดีตไม่มีบิล ให้แสดงค่าว่างเปล่า
+                                                        waterCost = 0;
+                                                        elecCost = 0;
+                                                        other = 0;
+                                                        totalCost = 0;
+                                                        rent = 0;
+                                                    }
+                                                }
+                                            }
+
+                                            return (
+                                                <tr key={room.number} className={`hover:bg-slate-50/60 transition-colors group ${!room.tenant && 'opacity-60 bg-slate-50/30'}`}>
+                                                    <td className="px-6 py-4">
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="font-bold text-slate-800 text-base">{room.number}</span>
+                                                            {!room.tenant && <Badge variant="outline" className="text-[10px] bg-slate-100 text-slate-500 border-none px-1.5 py-0">ว่าง</Badge>}
                                                         </div>
-                                                    ) : (
-                                                        <span className="text-slate-400 text-xs italic">-</span>
-                                                    )}
-                                                </td>
-                                                <td className="px-6 py-4 text-right">
-                                                    <span className="font-bold text-slate-900">฿{room.rent.toLocaleString()}</span>
-                                                </td>
-                                                <td className="px-6 py-4 text-center">
-                                                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-white hover:shadow-sm">
-                                                        <MoreHorizontal size={16} className="text-slate-400 group-hover:text-indigo-500" />
-                                                    </Button>
-                                                </td>
-                                            </tr>
-                                        ))}
+                                                    </td>
+                                                    <td className="px-6 py-4">
+                                                        {room.tenant ? (
+                                                            <div className="flex items-center gap-3">
+                                                                <span className="font-bold text-slate-700 text-sm">{room.tenant.name}</span>
+                                                            </div>
+                                                        ) : (
+                                                            <span className="text-slate-400 text-xs italic">-</span>
+                                                        )}
+                                                    </td>
+                                                    <td className="px-6 py-4 text-right">
+                                                        <span className="font-bold text-slate-700">{rent > 0 ? `฿${rent.toLocaleString()}` : '-'}</span>
+                                                    </td>
+                                                    <td className="px-6 py-4 text-right">
+                                                        {room.tenant ? (
+                                                            <span className="font-medium text-amber-600">฿{elecCost.toLocaleString()}</span>
+                                                        ) : <span className="text-slate-400">-</span>}
+                                                    </td>
+                                                    <td className="px-6 py-4 text-right">
+                                                        {room.tenant ? (
+                                                            <span className="font-medium text-blue-600">฿{waterCost.toLocaleString()}</span>
+                                                        ) : <span className="text-slate-400">-</span>}
+                                                    </td>
+                                                    <td className="px-6 py-4 text-right">
+                                                        {room.tenant ? (
+                                                            <span className="font-medium text-slate-500">฿{other.toLocaleString()}</span>
+                                                        ) : <span className="text-slate-400">-</span>}
+                                                    </td>
+                                                    <td className="px-6 py-4 text-right">
+                                                        {room.tenant ? (
+                                                            <span className="font-bold text-indigo-600">฿{totalCost.toLocaleString()}<span className="text-xs font-normal text-slate-400 ml-1">/ด.</span></span>
+                                                        ) : <span className="text-slate-400">-</span>}
+                                                    </td>
+                                                    <td className="px-6 py-4 text-center">
+                                                        <DropdownMenu>
+                                                            <DropdownMenuTrigger asChild>
+                                                                <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-white hover:shadow-sm">
+                                                                    <MoreHorizontal size={16} className="text-slate-400 group-hover:text-indigo-500" />
+                                                                </Button>
+                                                            </DropdownMenuTrigger>
+                                                            <DropdownMenuContent align="end" className="w-48 rounded-xl shadow-lg border-slate-100">
+                                                                <DropdownMenuLabel>ตัวเลือก</DropdownMenuLabel>
+                                                                {room.status === 'vacant' ? (
+                                                                    <DropdownMenuItem className="cursor-pointer text-indigo-600 focus:text-indigo-700" onClick={() => navigate('/tenants')}>
+                                                                        <Plus size={14} className="mr-2" /> เพิ่มผู้เช่าใหม่
+                                                                    </DropdownMenuItem>
+                                                                ) : (
+                                                                    <DropdownMenuItem className="cursor-pointer" onClick={() => navigate('/tenants')}>
+                                                                        <Eye size={14} className="mr-2" /> ดูข้อมูลผู้เช่า
+                                                                    </DropdownMenuItem>
+                                                                )}
+                                                            </DropdownMenuContent>
+                                                        </DropdownMenu>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
                                     </tbody>
                                 </table>
                             </CardContent>
@@ -413,6 +539,38 @@ export default function Rooms() {
                     </motion.div>
                 )}
             </AnimatePresence>
+
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+                <div className="flex flex-col sm:flex-row items-center justify-between bg-white px-6 py-4 rounded-2xl shadow-sm border border-slate-100 mt-6 gap-4">
+                    <div className="text-sm text-slate-500 text-center sm:text-left">
+                        แสดง <span className="font-bold text-slate-800">{(validCurrentPage - 1) * itemsPerPage + 1}</span> ถึง <span className="font-bold text-slate-800">{Math.min(validCurrentPage * itemsPerPage, filteredRooms.length)}</span> จาก <span className="font-bold text-slate-800">{filteredRooms.length}</span> ห้องพัก
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            className="bg-white border-slate-200 text-slate-600 hover:bg-slate-50 font-semibold rounded-lg"
+                            onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                            disabled={validCurrentPage === 1}
+                        >
+                            ก่อนหน้า
+                        </Button>
+                        <div className="flex items-center justify-center min-w-[3rem] px-2 py-1 bg-slate-50 rounded-lg border border-slate-100 text-sm font-bold text-slate-700">
+                            {validCurrentPage} / {totalPages}
+                        </div>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            className="bg-white border-slate-200 text-slate-600 hover:bg-slate-50 font-semibold rounded-lg"
+                            onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                            disabled={validCurrentPage === totalPages}
+                        >
+                            ถัดไป
+                        </Button>
+                    </div>
+                </div>
+            )}
 
             {filteredRooms.length === 0 && (
                 <div className="flex flex-col items-center justify-center py-20 text-center">

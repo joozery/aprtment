@@ -16,7 +16,9 @@ export default function Buildings() {
         name: '',
         floors: 4,
         roomsPerFloor: 8,
-        defaultRent: 4500
+        defaultRent: 4500,
+        address: '',
+        taxId: ''
     });
 
     const handleSubmit = (e) => {
@@ -30,7 +32,7 @@ export default function Buildings() {
     };
 
     const resetForm = () => {
-        setFormData({ name: '', floors: 4, roomsPerFloor: 8, defaultRent: 4500 });
+        setFormData({ name: '', floors: 4, roomsPerFloor: 8, defaultRent: 4500, address: '', taxId: '' });
         setEditingBuilding(null);
         setIsDialogOpen(false);
     };
@@ -41,7 +43,9 @@ export default function Buildings() {
             name: building.name,
             floors: building.floors,
             roomsPerFloor: building.roomsPerFloor,
-            defaultRent: building.defaultRent
+            defaultRent: building.defaultRent,
+            address: building.address || '',
+            taxId: building.taxId || ''
         });
         setIsDialogOpen(true);
     };
@@ -122,6 +126,25 @@ export default function Buildings() {
                                         required
                                     />
                                 </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="address">ที่อยู่ตึก (ใช้พิมพ์ในบิล)</Label>
+                                    <textarea
+                                        id="address"
+                                        value={formData.address}
+                                        onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                                        placeholder="เลขที่ หมู่ ซอย ถนน ตำบล อำเภอ จังหวัด รหัสไปรษณีย์"
+                                        className="flex min-h-[80px] w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm placeholder:text-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 disabled:cursor-not-allowed disabled:opacity-50"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="taxId">เลขประจำตัวผู้เสียภาษี</Label>
+                                    <Input
+                                        id="taxId"
+                                        value={formData.taxId}
+                                        onChange={(e) => setFormData({ ...formData, taxId: e.target.value })}
+                                        placeholder="เช่น 01055xxxxxxxx"
+                                    />
+                                </div>
                             </div>
                             <DialogFooter>
                                 <Button type="button" variant="outline" onClick={resetForm}>
@@ -197,6 +220,12 @@ export default function Buildings() {
                                             ฿{building.defaultRent.toLocaleString()}
                                         </span>
                                     </div>
+                                    {(building.address || building.taxId) && (
+                                        <div className="mt-3 pt-3 border-t border-indigo-100/50">
+                                            {building.taxId && <p className="text-[10px] text-indigo-600 mb-1"><span className="font-bold">TAX ID:</span> {building.taxId}</p>}
+                                            {building.address && <p className="text-[10px] text-indigo-700/70 truncate line-clamp-2 leading-tight" title={building.address}>{building.address}</p>}
+                                        </div>
+                                    )}
                                 </div>
                             </CardContent>
                         </Card>

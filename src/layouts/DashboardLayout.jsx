@@ -12,7 +12,8 @@ import {
     Menu,
     ChevronRight,
     Settings,
-    Home
+    Home,
+    CreditCard
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -55,6 +56,7 @@ export default function DashboardLayout() {
         { icon: Home, label: 'จัดการห้องพัก', path: '/rooms' },
         { icon: Users, label: 'ผู้เช่าและสัญญา', path: '/tenants' },
         { icon: ReceiptText, label: 'การเงินและค่าที่พัก', path: '/billing' },
+        { icon: CreditCard, label: 'ชำระเงิน', path: '/payment' },
         { icon: BarChart3, label: 'รายงาน', path: '/reports' },
     ];
 

@@ -1,0 +1,36 @@
+const mongoose = require('mongoose');
+
+const buildingSchema = new mongoose.Schema({
+    name: {
+        type: String,
+        required: true,
+        trim: true
+    },
+    floors: {
+        type: Number,
+        required: true,
+        min: 1
+    },
+    roomsPerFloor: {
+        type: Number,
+        required: true,
+        min: 1
+    },
+    defaultRent: {
+        type: Number,
+        required: true,
+        min: 0
+    },
+    address: {
+        type: String,
+        default: '' // ที่อยู่สำหรับตีพิมพ์บนบิล
+    },
+    taxId: {
+        type: String,
+        default: '' // เลขประจำตัวผู้เสียภาษี (ถ้ามี)
+    }
+}, {
+    timestamps: true
+});
+
+module.exports = mongoose.model('Building', buildingSchema);

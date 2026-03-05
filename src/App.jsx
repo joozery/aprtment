@@ -12,6 +12,7 @@ import ContractView from './pages/ContractView';
 import ContractTemplates from './pages/ContractTemplates';
 import ReceiptView from './pages/ReceiptView';
 import BulkReceipts from './pages/BulkReceipts';
+import Payment from './pages/Payment';
 
 function App() {
   return (
@@ -25,11 +26,13 @@ function App() {
             <Route path="rooms" element={<Rooms />} />
             <Route path="tenants" element={<Tenants />} />
             <Route path="billing" element={<Billing />} />
+            <Route path="payment" element={<Payment />} />
             <Route path="reports" element={<Reports />} />
             <Route path="settings" element={<Settings />} />
           </Route>
           <Route path="/contract/:id" element={<ContractView />} />
           <Route path="/receipt/:room" element={<ReceiptView />} />
+          <Route path="/receipts/all" element={<BulkReceipts />} />
           <Route path="/receipts/building/:buildingId" element={<BulkReceipts />} />
           <Route path="/templates" element={<
             DashboardLayout>

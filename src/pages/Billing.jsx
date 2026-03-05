@@ -59,36 +59,98 @@ import {
 import { useApp } from '@/context/AppContext';
 
 export default function Billing() {
-    const { billing, tenants, calculateBill, payBill, meters, setMeters, buildings } = useApp();
+    const { billing, tenants, calculateBill, payBill, meters, setMeters, buildings, settings, updateTenant, deleteBill, updateBillStatus } = useApp();
     const navigate = useNavigate();
     const [activeTab, setActiveTab] = useState('invoice');
     const [search, setSearch] = useState('');
     const [selectedBuilding, setSelectedBuilding] = useState('all');
     const [statusFilter, setStatusFilter] = useState('all');
 
-    // Filter Logic for Billing
-    const filteredBilling = billing.filter(b => {
+    // Dynamic Billing Logic
+    const waterUnit = settings?.waterRate || 35;
+    const electricUnit = settings?.electricRate || 11;
+    const waterMin = settings?.waterMin ?? 200;
+    const electricMin = settings?.electricMin ?? 200;
+    const serviceFee = settings?.serviceFee ?? 200;
+
+    const getMonthLabel = (isoDate) => {
+        if (!isoDate) return '-';
+        return new Date(isoDate).toLocaleDateString('th-TH', { month: 'long', year: 'numeric' });
+    };
+    const uniqueMonths = [...new Set(billing.map(b => getMonthLabel(b.createdAt)))].filter(s => s !== '-').sort().reverse();
+    const [monthFilter, setMonthFilter] = useState('current');
+
+    const baseBilling = monthFilter === 'current' ? tenants.map(t => {
+        // Find existing unpaid invoice for this room, or the latest paid if you prefer. 
+        // For simplicity, find any invoice for this room. If none or all are paid, we can generate a draft
+        const existingInvoice = billing.find(b => b.room === t.room && b.status !== 'ชำระแล้ว');
+        if (existingInvoice) return existingInvoice;
+
+        const prevElec = t.lastElectricMeter || 0;
+        const currElec = meters.electric[t.room] !== undefined && meters.electric[t.room] !== ''
+            ? parseFloat(meters.electric[t.room])
+            : prevElec;
+        const elecUnits = Math.max(0, currElec - prevElec);
+        const elecCost = Math.max(elecUnits * electricUnit, electricMin);
+
+        const prevWater = t.lastWaterMeter || 0;
+        const currWater = meters.water[t.room] !== undefined && meters.water[t.room] !== ''
+            ? parseFloat(meters.water[t.room])
+            : prevWater;
+        const waterUnits = Math.max(0, currWater - prevWater);
+        const waterCost = Math.max(waterUnits * waterUnit, waterMin);
+
+        return {
+            isDraft: true,
+            room: t.room,
+            name: t.name,
+            buildingId: t.buildingId,
+            water: waterUnits,
+            electric: elecUnits,
+            total: (t.rent || 4500) + waterCost + elecCost + serviceFee,
+            status: 'ยังไม่ออกบิล',
+            lastPay: '-',
+            currentWater: currWater,
+            currentElectric: currElec
+        };
+    }) : (() => {
+        const monthBills = billing.filter(b => getMonthLabel(b.createdAt) === monthFilter);
+        // Deduplicate: keep only the latest bill per room
+        const latestByRoom = {};
+        monthBills.forEach(b => {
+            if (!latestByRoom[b.room] || new Date(b.createdAt) > new Date(latestByRoom[b.room].createdAt)) {
+                latestByRoom[b.room] = b;
+            }
+        });
+        return Object.values(latestByRoom);
+    })();
+
+    const filteredBilling = baseBilling.filter(b => {
         const matchesSearch = b.room.includes(search) || b.name.includes(search);
-        const matchesBuilding = selectedBuilding === 'all' || b.buildingId === parseInt(selectedBuilding);
+
+        // Fallback to tenant's buildingId if the invoice is old and missing it
+        const billBuildingId = b.buildingId || tenants.find(t => t.room === b.room)?.buildingId;
+        const matchesBuilding = selectedBuilding === 'all' || String(billBuildingId) === selectedBuilding;
         const matchesStatus = statusFilter === 'all' ||
             (statusFilter === 'paid' && b.status === 'ชำระแล้ว') ||
-            (statusFilter === 'pending' && b.status === 'รอชำระ') ||
-            (statusFilter === 'overdue' && b.status === 'เกินกำหนด');
+            (statusFilter === 'pending' && (b.status === 'รอการชำระ' || b.status === 'รอชำระ')) ||
+            (statusFilter === 'overdue' && b.status === 'เกินกำหนด') ||
+            (statusFilter === 'draft' && b.status === 'ยังไม่ออกบิล');
         return matchesSearch && matchesBuilding && matchesStatus;
-    });
+    }).sort((a, b) => String(a.room).localeCompare(String(b.room), undefined, { numeric: true }));
 
     // Filter Logic for Meters (Tenants)
     const filteredTenants = tenants.filter(t => {
         const matchesSearch = t.room.includes(search) || t.name.toLowerCase().includes(search.toLowerCase());
-        const matchesBuilding = selectedBuilding === 'all' || t.buildingId === parseInt(selectedBuilding);
+        const matchesBuilding = selectedBuilding === 'all' || String(t.buildingId) === selectedBuilding;
         return matchesSearch && matchesBuilding;
-    });
+    }).sort((a, b) => String(a.room).localeCompare(String(b.room), undefined, { numeric: true }));
 
-    // Metrics Calculation
-    const totalPending = billing.reduce((acc, curr) => acc + (curr.status !== 'ชำระแล้ว' ? curr.total : 0), 0);
-    const totalPaid = billing.reduce((acc, curr) => acc + (curr.status === 'ชำระแล้ว' ? curr.total : 0), 0);
-    const paidCount = billing.filter(b => b.status === 'ชำระแล้ว').length;
-    const totalCount = billing.length;
+    // Metrics Calculation uses baseBilling now to reflect full pipeline
+    const totalPending = baseBilling.reduce((acc, curr) => acc + (curr.status !== 'ชำระแล้ว' && curr.status !== 'ยังไม่ออกบิล' ? curr.total : 0), 0);
+    const totalPaid = baseBilling.reduce((acc, curr) => acc + (curr.status === 'ชำระแล้ว' ? curr.total : 0), 0);
+    const paidCount = baseBilling.filter(b => b.status === 'ชำระแล้ว').length;
+    const totalCount = baseBilling.filter(b => b.status !== 'ยังไม่ออกบิล').length || 1;
 
     const handleCalculateAll = () => {
         tenants.forEach(t => {
@@ -102,7 +164,7 @@ export default function Billing() {
             const electricUsage = Math.max(0, currentElectric - lastElectric);
 
             if (currentWater > 0 || currentElectric > 0) {
-                calculateBill(t.room, waterUsage, electricUsage);
+                calculateBill(t.room, waterUsage, electricUsage, currentWater, currentElectric);
             }
         });
         setActiveTab('invoice');
@@ -119,15 +181,23 @@ export default function Billing() {
                     </p>
                 </div>
                 <div className="flex gap-3">
-                    <Button variant="outline" className="h-10 px-4 rounded-xl border-slate-200 bg-white font-semibold text-slate-700 shadow-sm hover:bg-slate-50">
-                        <FileDown size={16} className="mr-2 text-slate-400" />
-                        Export Excel
+                    <Button
+                        variant="outline"
+                        onClick={() => {
+                            const params = monthFilter !== 'current' ? `?all=true&month=${encodeURIComponent(monthFilter)}` : '?all=true';
+                            navigate(`/receipts/all${params}`);
+                        }}
+                        className="h-10 px-4 rounded-xl border-slate-200 bg-white font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+                    >
+                        <Printer size={16} className="mr-2 text-slate-400" />
+                        พิมพ์บิลทั้งหมด
                     </Button>
                     <Button className="h-10 px-6 rounded-xl bg-indigo-600 text-white font-semibold shadow-lg shadow-indigo-100 hover:bg-indigo-700 hover:scale-[1.02] transition-all">
                         <Plus size={18} className="mr-2" />
                         สร้างบิลรอบใหม่
                     </Button>
                 </div>
+
             </div>
 
             {/* Metrics Cards */}
@@ -202,6 +272,9 @@ export default function Billing() {
                         <TabsTrigger value="meter" className="px-6 h-10 rounded-lg data-[state=active]:bg-indigo-50 data-[state=active]:text-indigo-600 font-semibold text-slate-500">
                             บันทึกมิเตอร์
                         </TabsTrigger>
+                        <TabsTrigger value="summary" className="px-6 h-10 rounded-lg data-[state=active]:bg-indigo-50 data-[state=active]:text-indigo-600 font-semibold text-slate-500">
+                            สรุปค่าน้ำ-ไฟ
+                        </TabsTrigger>
                     </TabsList>
 
                     <div className="flex gap-2 w-full sm:w-auto">
@@ -231,12 +304,28 @@ export default function Billing() {
                                 <SelectContent>
                                     <SelectItem value="all">ทุกสถานะ</SelectItem>
                                     <SelectItem value="paid">ชำระแล้ว</SelectItem>
-                                    <SelectItem value="pending">รอชำระ</SelectItem>
+                                    <SelectItem value="pending">รอการชำระ</SelectItem>
                                     <SelectItem value="overdue">เกินกำหนด</SelectItem>
+                                    <SelectItem value="draft">ยังไม่ออกบิล</SelectItem>
                                 </SelectContent>
                             </Select>
                         )}
 
+                        {/* Month filter - visible on all tabs */}
+                        <Select value={monthFilter} onValueChange={setMonthFilter}>
+                            <SelectTrigger className="w-[180px] h-10 bg-white border-slate-200 rounded-xl font-medium">
+                                <div className="flex items-center gap-2 text-slate-600">
+                                    <Calendar size={16} />
+                                    <SelectValue placeholder="รอบบิล" />
+                                </div>
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="current">รอบปัจจุบัน (บันทึกใหม่)</SelectItem>
+                                {uniqueMonths.map(m => (
+                                    <SelectItem key={m} value={m}>{m}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                         <div className="relative flex-1 sm:w-64">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
                             <Input
@@ -318,7 +407,8 @@ export default function Billing() {
                                                 <TableCell className="text-center">
                                                     <Badge className={`font-semibold capitalize shadow-none border px-2.5 py-0.5 rounded-full ${row.status === 'ชำระแล้ว' ? 'bg-emerald-50 text-emerald-600 border-emerald-100 hover:bg-emerald-100' :
                                                         row.status === 'เกินกำหนด' ? 'bg-rose-50 text-rose-600 border-rose-100 hover:bg-rose-100' :
-                                                            'bg-amber-50 text-amber-600 border-amber-100 hover:bg-amber-100'
+                                                            row.status === 'ยังไม่ออกบิล' ? 'bg-slate-100 text-slate-500 border-slate-200 hover:bg-slate-200' :
+                                                                'bg-amber-50 text-amber-600 border-amber-100 hover:bg-amber-100'
                                                         }`}>
                                                         {row.status}
                                                     </Badge>
@@ -334,10 +424,30 @@ export default function Billing() {
                                                             <DropdownMenuContent align="end" className="w-48 rounded-xl shadow-lg border-slate-100 p-1">
                                                                 <DropdownMenuLabel className="text-xs text-slate-400 px-2 py-1.5 uppercase tracking-wider font-semibold">ตัวเลือก</DropdownMenuLabel>
 
-                                                                {row.status !== 'ชำระแล้ว' && (
-                                                                    <DropdownMenuItem onClick={() => payBill(row.room)} className="rounded-lg text-sm font-medium text-emerald-600 focus:bg-emerald-50 cursor-pointer">
-                                                                        <CheckCircle2 size={14} className="mr-2" /> ยืนยันการชำระเงิน
+                                                                {row.status === 'ยังไม่ออกบิล' && (
+                                                                    <DropdownMenuItem onClick={() => calculateBill(row.room, row.water, row.electric, row.currentWater, row.currentElectric)} className="rounded-lg text-sm font-medium text-indigo-600 focus:bg-indigo-50 cursor-pointer">
+                                                                        <Plus size={14} className="mr-2" /> บันทึกออกบิล
                                                                     </DropdownMenuItem>
+                                                                )}
+
+                                                                {(row.status !== 'ยังไม่ออกบิล') && (
+                                                                    <>
+                                                                        {row.status !== 'ชำระแล้ว' && (
+                                                                            <DropdownMenuItem onClick={() => payBill(row.room)} className="rounded-lg text-sm font-medium text-emerald-600 focus:bg-emerald-50 cursor-pointer">
+                                                                                <CheckCircle2 size={14} className="mr-2" /> ยืนยันการชำระเงิน
+                                                                            </DropdownMenuItem>
+                                                                        )}
+                                                                        {row.status !== 'รอการชำระ' && (
+                                                                            <DropdownMenuItem onClick={() => updateBillStatus(row.id || row._id, 'รอการชำระ')} className="rounded-lg text-sm font-medium text-amber-600 focus:bg-amber-50 cursor-pointer">
+                                                                                <Wallet size={14} className="mr-2" /> เปลี่ยนเป็นรอการชำระ
+                                                                            </DropdownMenuItem>
+                                                                        )}
+                                                                        {row.status !== 'เกินกำหนด' && (
+                                                                            <DropdownMenuItem onClick={() => updateBillStatus(row.id || row._id, 'เกินกำหนด')} className="rounded-lg text-sm font-medium text-rose-600 focus:bg-rose-50 cursor-pointer">
+                                                                                <Calendar size={14} className="mr-2" /> เปลี่ยนเป็นเกินกำหนด
+                                                                            </DropdownMenuItem>
+                                                                        )}
+                                                                    </>
                                                                 )}
 
                                                                 <DropdownMenuItem onClick={() => navigate(`/receipt/${row.room}`)} className="rounded-lg text-sm font-medium text-slate-700 focus:bg-slate-50 cursor-pointer">
@@ -348,11 +458,14 @@ export default function Billing() {
                                                                     <FileDown size={14} className="mr-2 text-slate-400" /> ส่งทางอีเมล
                                                                 </DropdownMenuItem>
 
-                                                                <DropdownMenuSeparator className="bg-slate-100 m-1" />
-
-                                                                <DropdownMenuItem className="rounded-lg text-sm font-medium text-rose-600 focus:bg-rose-50 cursor-pointer">
-                                                                    ยกเลิกบิล
-                                                                </DropdownMenuItem>
+                                                                {row.status !== 'ยังไม่ออกบิล' && (
+                                                                    <>
+                                                                        <DropdownMenuSeparator className="bg-slate-100 m-1" />
+                                                                        <DropdownMenuItem onClick={() => deleteBill(row.id || row._id)} className="rounded-lg text-sm font-medium text-rose-600 focus:bg-rose-50 cursor-pointer">
+                                                                            ลบบิลนี้
+                                                                        </DropdownMenuItem>
+                                                                    </>
+                                                                )}
                                                             </DropdownMenuContent>
                                                         </DropdownMenu>
                                                     </div>
@@ -393,45 +506,212 @@ export default function Billing() {
                                                 </TableRow>
                                             </TableHeader>
                                             <TableBody>
-                                                {filteredTenants.length === 0 ? (
+                                                {(monthFilter === 'current' ? filteredTenants : filteredBilling).length === 0 ? (
                                                     <TableRow>
                                                         <TableCell colSpan={4} className="h-24 text-center text-slate-400">
-                                                            ไม่พบห้องที่ค้นหา
+                                                            ไม่พบข้อมูลตามที่ค้นหาในรอบบิลนี้
                                                         </TableCell>
                                                     </TableRow>
-                                                ) : filteredTenants.map((t) => (
-                                                    <TableRow key={t.room} className="border-slate-50 hover:bg-slate-50/50 transition-colors">
-                                                        <TableCell className="pl-6 font-bold text-slate-700">
-                                                            <div>{t.room}</div>
-                                                            <div className="text-xs text-slate-400 font-medium">{t.name}</div>
-                                                        </TableCell>
-                                                        <TableCell className="font-medium text-slate-500">
-                                                            {type === 'water' ? (t.lastWaterMeter || 0) : (t.lastElectricMeter || 0)}
-                                                        </TableCell>
-                                                        <TableCell>
-                                                            <Input
-                                                                type="number"
-                                                                min="0"
-                                                                step="any"
-                                                                value={meters[type][t.room] || ''}
-                                                                onChange={(e) => setMeters(prev => ({ ...prev, [type]: { ...prev[type], [t.room]: e.target.value } }))}
-                                                                className="h-9 w-32 bg-white border-slate-200 focus-visible:ring-indigo-500 font-medium"
-                                                                placeholder="ระบุเลขมิเตอร์"
-                                                            />
-                                                        </TableCell>
-                                                        <TableCell className="text-right pr-6 font-medium text-slate-900">
-                                                            {meters[type][t.room] ?
-                                                                Math.max(0, (meters[type][t.room] - (type === 'water' ? (t.lastWaterMeter || 0) : (t.lastElectricMeter || 0))))
-                                                                : '-'}
-                                                        </TableCell>
-                                                    </TableRow>
-                                                ))}
+                                                ) : (monthFilter === 'current' ? filteredTenants : filteredBilling).map((item) => {
+                                                    const isCurrent = monthFilter === 'current';
+                                                    let prevVal = 0, currVal = '', usageVal = '-';
+
+                                                    if (isCurrent) {
+                                                        prevVal = type === 'water' ? (item.lastWaterMeter || 0) : (item.lastElectricMeter || 0);
+                                                        currVal = meters[type][item.room] || '';
+                                                        if (currVal) {
+                                                            let u = parseFloat(currVal) - parseFloat(prevVal);
+                                                            usageVal = Math.max(0, u);
+                                                        }
+                                                    } else {
+                                                        const billUsage = type === 'water' ? (item.water || 0) : (item.electric || 0);
+                                                        const billCurr = type === 'water' ? item.currentWater : item.currentElectric;
+                                                        if (billCurr !== undefined) {
+                                                            currVal = billCurr;
+                                                            prevVal = parseFloat(billCurr) - billUsage;
+                                                        } else {
+                                                            currVal = '-';
+                                                            prevVal = '-';
+                                                        }
+                                                        usageVal = billUsage;
+                                                    }
+
+                                                    return (
+                                                        <TableRow key={item.room} className="border-slate-50 hover:bg-slate-50/50 transition-colors">
+                                                            <TableCell className="pl-6 font-bold text-slate-700">
+                                                                <div>{item.room}</div>
+                                                                <div className="text-xs text-slate-400 font-medium">{item.name}</div>
+                                                            </TableCell>
+                                                            <TableCell className="font-medium text-slate-500">
+                                                                {isCurrent ? (
+                                                                    <Input
+                                                                        type="number"
+                                                                        min="0"
+                                                                        step="any"
+                                                                        defaultValue={prevVal}
+                                                                        onBlur={(e) => {
+                                                                            const val = parseFloat(e.target.value);
+                                                                            if (!isNaN(val) && val !== prevVal) {
+                                                                                updateTenant(item.id, {
+                                                                                    [type === 'water' ? 'lastWaterMeter' : 'lastElectricMeter']: val
+                                                                                });
+                                                                            }
+                                                                        }}
+                                                                        className="h-9 w-28 bg-slate-50 border-slate-200 focus-visible:ring-indigo-500 font-medium"
+                                                                        placeholder="เลขครั้งก่อน"
+                                                                    />
+                                                                ) : (
+                                                                    <div className="h-9 w-28 flex items-center px-3 bg-slate-50 rounded-md border border-slate-200 opacity-70">
+                                                                        {prevVal}
+                                                                    </div>
+                                                                )}
+                                                            </TableCell>
+                                                            <TableCell>
+                                                                {isCurrent ? (
+                                                                    <Input
+                                                                        type="number"
+                                                                        min="0"
+                                                                        step="any"
+                                                                        value={currVal}
+                                                                        onChange={(e) => setMeters(prev => ({ ...prev, [type]: { ...prev[type], [item.room]: e.target.value } }))}
+                                                                        className="h-9 w-32 bg-white border-slate-200 focus-visible:ring-indigo-500 font-medium"
+                                                                        placeholder="ระบุเลขมิเตอร์"
+                                                                    />
+                                                                ) : (
+                                                                    <div className="h-9 w-32 flex items-center px-3 bg-white rounded-md border border-slate-200 opacity-70">
+                                                                        {currVal}
+                                                                    </div>
+                                                                )}
+                                                            </TableCell>
+                                                            <TableCell className="text-right pr-6 font-medium text-slate-900">
+                                                                {usageVal}
+                                                            </TableCell>
+                                                        </TableRow>
+                                                    );
+                                                })}
                                             </TableBody>
                                         </Table>
                                     </div>
                                 </Card>
                             ))}
                         </div>
+                    </TabsContent>
+
+                    <TabsContent value="summary">
+                        <Card className="border-none shadow-sm rounded-2xl bg-white overflow-hidden p-8 print:p-0 print:shadow-none">
+                            <div className="flex justify-between items-start mb-6">
+                                <div>
+                                    <h2 className="text-2xl font-bold text-slate-900 mb-2">สรุปค่าน้ำ,ค่าไฟ</h2>
+                                    <p className="text-sm font-medium text-slate-600">วันเวลาที่พิมพ์ : {new Date().toLocaleString('th-TH')}</p>
+                                    <p className="text-sm font-medium text-slate-600">ข้อมูลรอบบิลปัจจุบัน</p>
+                                </div>
+                                <h2 className="text-2xl font-bold text-slate-900 tracking-tight">ตวงเงิน แมนชั่น</h2>
+                            </div>
+
+                            <div className="overflow-x-auto">
+                                <Table className="w-full text-sm">
+                                    <TableHeader>
+                                        <TableRow className="border-b-2 border-slate-200 hover:bg-transparent">
+                                            <TableHead className="font-bold text-slate-800 py-3">หมายเลข</TableHead>
+                                            <TableHead className="font-bold text-slate-800 py-3 min-w-[200px]">ชื่อ-สกุล</TableHead>
+                                            <TableHead className="font-bold text-slate-800 text-center py-3">มิเตอร์ไฟ</TableHead>
+                                            <TableHead className="font-bold text-slate-800 text-right py-3">จำนวนไฟ</TableHead>
+                                            <TableHead className="font-bold text-slate-800 text-right py-3">ค่าไฟ</TableHead>
+                                            <TableHead className="font-bold text-slate-800 text-center py-3">มิเตอร์น้ำ</TableHead>
+                                            <TableHead className="font-bold text-slate-800 text-right py-3">จำนวนน้ำ</TableHead>
+                                            <TableHead className="font-bold text-slate-800 text-right py-3">ค่าน้ำ</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {(monthFilter === 'current' ? filteredTenants : filteredBilling).length === 0 ? (
+                                            <TableRow>
+                                                <TableCell colSpan={8} className="h-40 text-center text-slate-400">
+                                                    ไม่พบข้อมูลการค้นหา
+                                                </TableCell>
+                                            </TableRow>
+                                        ) : (monthFilter === 'current' ? filteredTenants : filteredBilling).map((item) => {
+                                            const isCurrent = monthFilter === 'current';
+
+                                            let prevElec, currElec, elecUnits, elecCost;
+                                            let prevWater, currWater, waterUnits, waterCost;
+
+                                            if (isCurrent) {
+                                                prevElec = item.lastElectricMeter || 0;
+                                                currElec = meters.electric[item.room] !== undefined && meters.electric[item.room] !== ''
+                                                    ? parseFloat(meters.electric[item.room])
+                                                    : prevElec;
+                                                elecUnits = Math.max(0, currElec - prevElec);
+                                                elecCost = Math.max(elecUnits * (settings?.electricRate || 11), settings?.electricMin ?? 200);
+
+                                                prevWater = item.lastWaterMeter || 0;
+                                                currWater = meters.water[item.room] !== undefined && meters.water[item.room] !== ''
+                                                    ? parseFloat(meters.water[item.room])
+                                                    : prevWater;
+                                                waterUnits = Math.max(0, currWater - prevWater);
+                                                waterCost = Math.max(waterUnits * (settings?.waterRate || 35), settings?.waterMin ?? 200);
+                                            } else {
+                                                elecUnits = item.electric || 0;
+                                                elecCost = Math.max(elecUnits * (settings?.electricRate || 11), settings?.electricMin ?? 200);
+                                                if (item.currentElectric !== undefined) {
+                                                    currElec = item.currentElectric;
+                                                    prevElec = currElec - elecUnits;
+                                                } else {
+                                                    currElec = '-';
+                                                    prevElec = '-';
+                                                }
+
+                                                waterUnits = item.water || 0;
+                                                waterCost = Math.max(waterUnits * (settings?.waterRate || 35), settings?.waterMin ?? 200);
+                                                if (item.currentWater !== undefined) {
+                                                    currWater = item.currentWater;
+                                                    prevWater = currWater - waterUnits;
+                                                } else {
+                                                    currWater = '-';
+                                                    prevWater = '-';
+                                                }
+                                            }
+
+                                            return (
+                                                <TableRow key={item.room} className="border-b border-slate-100 hover:bg-slate-50/50">
+                                                    <TableCell className="font-bold text-slate-700">{item.room}</TableCell>
+                                                    <TableCell className="font-medium text-slate-600">{item.name}</TableCell>
+
+                                                    <TableCell className="text-center font-medium text-slate-500 whitespace-nowrap">
+                                                        {prevElec === '-' ? '-' : String(prevElec).padStart(4, '0')} - {currElec === '-' ? '-' : String(currElec).padStart(4, '0')}
+                                                    </TableCell>
+                                                    <TableCell className="text-right font-medium text-slate-700">
+                                                        {elecUnits}
+                                                    </TableCell>
+                                                    <TableCell className="text-right font-bold text-slate-800">
+                                                        {elecCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                    </TableCell>
+
+                                                    <TableCell className="text-center font-medium text-slate-500 whitespace-nowrap">
+                                                        {prevWater === '-' ? '-' : String(prevWater).padStart(4, '0')} - {currWater === '-' ? '-' : String(currWater).padStart(4, '0')}
+                                                    </TableCell>
+                                                    <TableCell className="text-right font-medium text-slate-700">
+                                                        {waterUnits}
+                                                    </TableCell>
+                                                    <TableCell className="text-right font-bold text-slate-800">
+                                                        {waterCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                    </TableCell>
+                                                </TableRow>
+                                            );
+                                        })}
+                                    </TableBody>
+                                </Table>
+                            </div>
+
+                            <div className="mt-8 flex justify-end print:hidden">
+                                <Button
+                                    onClick={() => window.print()}
+                                    className="bg-slate-900 text-white hover:bg-slate-800 rounded-xl px-6 h-10 shadow-lg shadow-slate-200"
+                                >
+                                    <Printer size={18} className="mr-2" />
+                                    พิมพ์เอกสารนี้
+                                </Button>
+                            </div>
+                        </Card>
                     </TabsContent>
                 </AnimatePresence>
             </Tabs>

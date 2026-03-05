@@ -66,7 +66,7 @@ const thaiBahtText = (amount) => {
 export default function ReceiptView() {
     const { room } = useParams();
     const navigate = useNavigate();
-    const { billing, tenants, settings } = useApp();
+    const { billing, tenants, settings, buildings } = useApp();
 
     const bill = billing.find(b => b.room === room);
     const tenant = tenants.find(t => t.room === room);
@@ -80,6 +80,17 @@ export default function ReceiptView() {
             </div>
         );
     }
+
+    const billBuildingId = bill.buildingId || tenant?.buildingId;
+    // Normalize both sides to plain string before compare (handles ObjectId objects)
+    const billBuildingIdStr = billBuildingId ? String(billBuildingId) : '';
+    const targetBuilding = buildings.find(b =>
+        billBuildingIdStr && (
+            String(b.id) === billBuildingIdStr ||
+            String(b._id) === billBuildingIdStr ||
+            (b._id && b._id.toString && b._id.toString() === billBuildingIdStr)
+        )
+    ) || buildings[0] || {};
 
     const rent = tenant?.rent || settings.defaultRent;
     const waterTotal = bill.water * settings.waterRate;
@@ -115,6 +126,7 @@ export default function ReceiptView() {
 
             <style>
                 {`
+                    @import url('https://fonts.googleapis.com/css2?family=Sarabun:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap');
                     @media print {
                         @page { 
                             size: A4 landscape; 
@@ -134,7 +146,7 @@ export default function ReceiptView() {
                             width: 100%; 
                             max-width: none; 
                             margin: 0; 
-                            padding: 0;
+                            padding: 20mm 15mm !important; /* Added left-right padding */
                             background: white !important;
                             box-shadow: none !important;
                             border: none !important;
@@ -149,13 +161,13 @@ export default function ReceiptView() {
                 `}
             </style>
 
-            <div className="print-container max-w-[240mm] mx-auto bg-white p-10">
+            <div className="print-container max-w-[240mm] mx-auto bg-white p-10" style={{ fontFamily: "'Sarabun', sans-serif" }}>
                 {/* Header */}
                 <div className="flex justify-between items-start mb-6">
                     <div>
-                        <h1 className="text-lg font-bold mb-1">ตวงเงินแมนชั่น</h1>
-                        <p className="text-xs mb-0.5">23/43 ม.9 ต.คลองหนึ่ง อ.คลองหลวง จ.ปทุมธานี 12120</p>
-                        <p className="text-xs">โทร. 099-013-6999</p>
+                        <h1 className="text-lg font-bold mb-1">{targetBuilding.name || 'ตวงเงินแมนชั่น'}</h1>
+                        <p className="text-xs mb-0.5">{targetBuilding.address || '23/43 ม.9 ต.คลองหนึ่ง อ.คลองหลวง จ.ปทุมธานี 12120'}</p>
+                        <p className="text-xs">โทร. {targetBuilding.phone || '099-013-6999'}</p>
                     </div>
                     <div className="text-right">
                         <h2 className="text-base font-bold mb-0.5">ใบเสร็จรับเงิน/ใบกำกับภาษี</h2>
@@ -210,7 +222,6 @@ export default function ReceiptView() {
                             <th className="border-r border-black py-2 px-3 text-right font-semibold">จำนวน</th>
                             <th className="border-r border-black py-2 px-3 text-right font-semibold">ราคา</th>
                             <th className="border-r border-black py-2 px-3 text-right font-semibold">จำนวนเงิน</th>
-                            <th className="border-r border-black py-2 px-3 text-right font-semibold">ภาษี</th>
                             <th className="py-2 px-3 text-right font-semibold">รวมเงิน</th>
                         </tr>
                     </thead>
@@ -225,7 +236,6 @@ export default function ReceiptView() {
                             <td className="border-r border-black py-2 px-3 text-right align-top">1</td>
                             <td className="border-r border-black py-2 px-3 text-right align-top">{rent.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                             <td className="border-r border-black py-2 px-3 text-right align-top">{rent.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                            <td className="border-r border-black py-2 px-3 text-right align-top">0.00</td>
                             <td className="py-2 px-3 text-right align-top">{rent.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                         </tr>
                         {/* Electric */}
@@ -233,12 +243,11 @@ export default function ReceiptView() {
                             <td className="border-r border-black py-2 px-3 text-center align-top">2</td>
                             <td className="border-r border-black py-2 px-3 align-top">
                                 <div className="font-semibold">ค่าไฟ</div>
-                                <div className="text-xs text-gray-600 mt-0.5">01256 - {(1256 + bill.electric)} &nbsp; {serviceStart} - {serviceEnd}</div>
+                                <div className="text-xs text-gray-600 mt-0.5">{(bill.currentElectric !== undefined && bill.electric) ? `${(parseFloat(bill.currentElectric) - bill.electric)} - ${bill.currentElectric}` : ''} &nbsp; {serviceStart} - {serviceEnd}</div>
                             </td>
                             <td className="border-r border-black py-2 px-3 text-right align-top">{bill.electric}</td>
-                            <td className="border-r border-black py-2 px-3 text-right align-top">-</td>
+                            <td className="border-r border-black py-2 px-3 text-right align-top">{settings.electricRate.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                             <td className="border-r border-black py-2 px-3 text-right align-top">{elecTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                            <td className="border-r border-black py-2 px-3 text-right align-top">0.00</td>
                             <td className="py-2 px-3 text-right align-top">{elecTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                         </tr>
                         {/* Water */}
@@ -246,12 +255,11 @@ export default function ReceiptView() {
                             <td className="border-r border-black py-2 px-3 text-center align-top">3</td>
                             <td className="border-r border-black py-2 px-3 align-top">
                                 <div className="font-semibold">ค่าน้ำ</div>
-                                <div className="text-xs text-gray-600 mt-0.5">00103 - {(103 + bill.water)} &nbsp; {serviceStart} - {serviceEnd}</div>
+                                <div className="text-xs text-gray-600 mt-0.5">{(bill.currentWater !== undefined && bill.water) ? `${(parseFloat(bill.currentWater) - bill.water)} - ${bill.currentWater}` : ''} &nbsp; {serviceStart} - {serviceEnd}</div>
                             </td>
                             <td className="border-r border-black py-2 px-3 text-right align-top">{bill.water}</td>
-                            <td className="border-r border-black py-2 px-3 text-right align-top">-</td>
+                            <td className="border-r border-black py-2 px-3 text-right align-top">{settings.waterRate.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                             <td className="border-r border-black py-2 px-3 text-right align-top">{waterTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                            <td className="border-r border-black py-2 px-3 text-right align-top">0.00</td>
                             <td className="py-2 px-3 text-right align-top">{waterTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                         </tr>
                         {/* Common Fee */}
@@ -263,21 +271,17 @@ export default function ReceiptView() {
                             <td className="border-r border-black py-2 px-3 text-right align-top">1</td>
                             <td className="border-r border-black py-2 px-3 text-right align-top">{commonFee.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                             <td className="border-r border-black py-2 px-3 text-right align-top">{commonFee.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                            <td className="border-r border-black py-2 px-3 text-right align-top">0.00</td>
                             <td className="py-2 px-3 text-right align-top">{commonFee.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                         </tr>
                         {/* Total */}
                         <tr>
-                            <td colSpan="2" className="border-r border-black py-2 px-3 font-semibold">
+                            <td colSpan="4" className="border-r border-black py-2 px-3 font-semibold">
                                 <div className="flex items-center justify-between">
                                     <span>ยอดเงินสุทธิ</span>
                                     <span className="text-xs italic text-gray-600 mx-4">* {thaiBahtText(netTotal)} *</span>
                                 </div>
                             </td>
-                            <td className="border-r border-black py-2 px-3"></td>
-                            <td className="border-r border-black py-2 px-3"></td>
                             <td className="border-r border-black py-2 px-3 text-right font-semibold">{netTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                            <td className="border-r border-black py-2 px-3 text-right font-semibold">0.00</td>
                             <td className="py-2 px-3 text-right font-semibold">{netTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                         </tr>
                     </tbody>
