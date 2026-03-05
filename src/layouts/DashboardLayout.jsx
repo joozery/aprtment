@@ -19,6 +19,7 @@ import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
 import { useState } from 'react';
+import { useAuth } from '@/context/AuthContext';
 
 const SidebarItem = ({ icon: Icon, label, path, active }) => (
     <Link to={path}>
@@ -49,6 +50,7 @@ const SidebarItem = ({ icon: Icon, label, path, active }) => (
 export default function DashboardLayout() {
     const location = useLocation();
     const [isSidebarOpen, setSidebarOpen] = useState(true);
+    const { user, logout } = useAuth();
 
     const menuItems = [
         { icon: LayoutDashboard, label: 'แดชบอร์ด', path: '/dashboard' },
@@ -96,11 +98,20 @@ export default function DashboardLayout() {
 
                 <div className="p-4 mt-auto">
                     <div className="bg-slate-50 rounded-xl p-3 flex items-center gap-3 border border-slate-100">
-                        <div className="flex-1 min-w-0">
-                            <p className="text-xs font-bold text-slate-800 truncate">สมชาย ใจดี</p>
-                            <p className="text-[10px] text-slate-400 font-medium">เจ้าของหอพัก</p>
+                        <div className="w-8 h-8 rounded-lg bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold text-sm shrink-0">
+                            {(user?.displayName || user?.username || 'A').charAt(0).toUpperCase()}
                         </div>
-                        <Button variant="ghost" size="icon" className="text-slate-400 hover:text-destructive hover:bg-rose-50 rounded-lg h-8 w-8">
+                        <div className="flex-1 min-w-0">
+                            <p className="text-xs font-bold text-slate-800 truncate">{user?.displayName || user?.username || 'Admin'}</p>
+                            <p className="text-[10px] text-slate-400 font-medium capitalize">{user?.role || 'admin'}</p>
+                        </div>
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={logout}
+                            className="text-slate-400 hover:text-destructive hover:bg-rose-50 rounded-lg h-8 w-8"
+                            title="ออกจากระบบ"
+                        >
                             <LogOut size={16} />
                         </Button>
                     </div>

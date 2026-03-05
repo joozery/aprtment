@@ -1,5 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AppProvider } from './context/AppContext';
+import { AuthProvider } from './context/AuthContext';
+import ProtectedRoute from './components/ProtectedRoute';
 import DashboardLayout from './layouts/DashboardLayout';
 import Dashboard from './pages/Dashboard';
 import Buildings from './pages/Buildings';
@@ -13,37 +15,48 @@ import ContractTemplates from './pages/ContractTemplates';
 import ReceiptView from './pages/ReceiptView';
 import BulkReceipts from './pages/BulkReceipts';
 import Payment from './pages/Payment';
+import Login from './pages/Login';
 
 function App() {
   return (
-    <AppProvider>
-      <Router>
-        <Routes>
-          <Route path="/" element={<DashboardLayout />}>
-            <Route index element={<Navigate to="/dashboard" replace />} />
-            <Route path="dashboard" element={<Dashboard />} />
-            <Route path="buildings" element={<Buildings />} />
-            <Route path="rooms" element={<Rooms />} />
-            <Route path="tenants" element={<Tenants />} />
-            <Route path="billing" element={<Billing />} />
-            <Route path="payment" element={<Payment />} />
-            <Route path="reports" element={<Reports />} />
-            <Route path="settings" element={<Settings />} />
-          </Route>
-          <Route path="/contract/:id" element={<ContractView />} />
-          <Route path="/receipt/:room" element={<ReceiptView />} />
-          <Route path="/receipts/all" element={<BulkReceipts />} />
-          <Route path="/receipts/building/:buildingId" element={<BulkReceipts />} />
-          <Route path="/templates" element={<
-            DashboardLayout>
-            <ContractTemplates />
-          </DashboardLayout>
-          } />
-        </Routes>
-      </Router>
-    </AppProvider>
+    <AuthProvider>
+      <AppProvider>
+        <Router>
+          <Routes>
+            {/* Public */}
+            <Route path="/login" element={<Login />} />
+
+            {/* Protected */}
+            <Route element={<ProtectedRoute />}>
+              <Route path="/" element={<DashboardLayout />}>
+                <Route index element={<Navigate to="/dashboard" replace />} />
+                <Route path="dashboard" element={<Dashboard />} />
+                <Route path="buildings" element={<Buildings />} />
+                <Route path="rooms" element={<Rooms />} />
+                <Route path="tenants" element={<Tenants />} />
+                <Route path="billing" element={<Billing />} />
+                <Route path="payment" element={<Payment />} />
+                <Route path="reports" element={<Reports />} />
+                <Route path="settings" element={<Settings />} />
+              </Route>
+              <Route path="/contract/:id" element={<ContractView />} />
+              <Route path="/receipt/:room" element={<ReceiptView />} />
+              <Route path="/receipts/all" element={<BulkReceipts />} />
+              <Route path="/receipts/building/:buildingId" element={<BulkReceipts />} />
+              <Route path="/templates" element={
+                <DashboardLayout>
+                  <ContractTemplates />
+                </DashboardLayout>
+              } />
+            </Route>
+
+            {/* Fallback */}
+            <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          </Routes>
+        </Router>
+      </AppProvider>
+    </AuthProvider>
   );
 }
-
 
 export default App;
