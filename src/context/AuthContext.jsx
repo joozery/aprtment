@@ -30,16 +30,23 @@ export const AuthProvider = ({ children }) => {
     }, []);
 
     const login = async (username, password) => {
-        const res = await axios.post(`${API_URL}/auth/login`, { username, password });
-        if (res.data.success) {
-            const { token, user: userData } = res.data;
-            localStorage.setItem('auth_token', token);
-            localStorage.setItem('auth_user', JSON.stringify(userData));
-            setAuthHeader(token);
-            setUser(userData);
-            return { success: true };
+        try {
+            const res = await axios.post(`${API_URL}/auth/login`, { username, password });
+            if (res.data.success) {
+                const { token, user: userData } = res.data;
+                localStorage.setItem('auth_token', token);
+                localStorage.setItem('auth_user', JSON.stringify(userData));
+                setAuthHeader(token);
+                setUser(userData);
+                return { success: true };
+            }
+            return { success: false, error: res.data.error };
+        } catch (err) {
+            return {
+                success: false,
+                error: err.response?.data?.error || 'เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์'
+            };
         }
-        return { success: false, error: res.data.error };
     };
 
     const logout = () => {

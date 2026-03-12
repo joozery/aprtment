@@ -16,6 +16,7 @@ import ReceiptView from './pages/ReceiptView';
 import BulkReceipts from './pages/BulkReceipts';
 import Payment from './pages/Payment';
 import Login from './pages/Login';
+import MeterSummaryReport from './pages/MeterSummaryReport';
 
 function App() {
   return (
@@ -43,6 +44,7 @@ function App() {
               <Route path="/receipt/:room" element={<ReceiptView />} />
               <Route path="/receipts/all" element={<BulkReceipts />} />
               <Route path="/receipts/building/:buildingId" element={<BulkReceipts />} />
+              <Route path="/reports/meter-summary" element={<MeterSummaryReport />} />
               <Route path="/templates" element={
                 <DashboardLayout>
                   <ContractTemplates />

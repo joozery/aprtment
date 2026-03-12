@@ -170,7 +170,7 @@ export default function ReceiptView() {
                         <p className="text-xs">โทร. {targetBuilding.phone || '099-013-6999'}</p>
                     </div>
                     <div className="text-right">
-                        <h2 className="text-base font-bold mb-0.5">ใบเสร็จรับเงิน/ใบกำกับภาษี</h2>
+                        <h2 className="text-base font-bold mb-0.5">ใบแจ้งหนี้/ใบเสร็จรับเงิน</h2>
                         <p className="text-xs">หน้าที่ 1/1</p>
                     </div>
                 </div>

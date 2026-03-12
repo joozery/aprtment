@@ -1,22 +1,35 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useApp } from '@/context/AppContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Droplets, Zap, Home, Save, CheckCircle2, QrCode } from 'lucide-react';
+import { Droplets, Zap, Home, Save, CheckCircle2, QrCode, Loader2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 export default function Settings() {
     const { settings, updateSettings } = useApp();
     const [formData, setFormData] = useState(settings);
+    const [isSaving, setIsSaving] = useState(false);
     const [isSaved, setIsSaved] = useState(false);
 
-    const handleSubmit = (e) => {
+    // Sync form data when settings are fetched from server
+    useEffect(() => {
+        setFormData(settings);
+    }, [settings]);
+
+    const handleSubmit = async (e) => {
         e.preventDefault();
-        updateSettings(formData);
-        setIsSaved(true);
-        setTimeout(() => setIsSaved(false), 2000);
+        setIsSaving(true);
+        const success = await updateSettings(formData);
+        setIsSaving(false);
+        
+        if (success) {
+            setIsSaved(true);
+            setTimeout(() => setIsSaved(false), 2000);
+        } else {
+            alert('เกิดข้อผิดพลาดในการบันทึกข้อมูล กรุณาลองใหม่อีกครั้ง');
+        }
     };
 
     const handleChange = (field, value) => {
@@ -261,9 +274,14 @@ export default function Settings() {
                             ? 'bg-emerald-600 hover:bg-emerald-700'
                             : 'bg-indigo-600 hover:bg-indigo-700'
                             }`}
-                        disabled={isSaved}
+                        disabled={isSaving || isSaved}
                     >
-                        {isSaved ? (
+                        {isSaving ? (
+                            <>
+                                <Loader2 size={16} className="mr-2 animate-spin" />
+                                กำลังบันทึก...
+                            </>
+                        ) : isSaved ? (
                             <>
                                 <CheckCircle2 size={16} className="mr-2" />
                                 บันทึกเรียบร้อย

@@ -352,9 +352,13 @@ export const AppProvider = ({ children }) => {
     const updateSettings = async (newSettings) => {
         setSettings(prev => ({ ...prev, ...newSettings }));
         try {
-            await axios.put(`${API_URL}/settings`, newSettings);
+            // Sanitize data: remove DB-specific fields
+            const { _id, key, __v, createdAt, updatedAt, ...cleanData } = newSettings;
+            const res = await axios.put(`${API_URL}/settings`, cleanData);
+            return res.data.success;
         } catch (err) {
             console.error('Error saving settings:', err);
+            return false;
         }
     };
 

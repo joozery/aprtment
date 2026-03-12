@@ -171,9 +171,9 @@ export default function Billing() {
     };
 
     return (
-        <div className="space-y-8 pb-10 min-h-screen bg-slate-50/50 p-6 md:p-10">
+        <div className="space-y-8 pb-10 min-h-screen bg-slate-50/50 p-6 md:p-10 print:p-0 print:bg-white">
             {/* Header Section */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 no-print">
                 <div>
                     <h2 className="text-3xl font-bold tracking-tight text-slate-900">การเงินและค่าที่พัก</h2>
                     <p className="text-slate-500 mt-2 font-medium flex items-center gap-2">
@@ -192,16 +192,12 @@ export default function Billing() {
                         <Printer size={16} className="mr-2 text-slate-400" />
                         พิมพ์บิลทั้งหมด
                     </Button>
-                    <Button className="h-10 px-6 rounded-xl bg-indigo-600 text-white font-semibold shadow-lg shadow-indigo-100 hover:bg-indigo-700 hover:scale-[1.02] transition-all">
-                        <Plus size={18} className="mr-2" />
-                        สร้างบิลรอบใหม่
-                    </Button>
                 </div>
 
             </div>
 
             {/* Metrics Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 no-print">
                 <Card className="border-none shadow-sm rounded-2xl bg-white relative overflow-hidden group hover:shadow-md transition-all">
                     <div className="absolute right-0 top-0 p-4 opacity-5 group-hover:scale-110 transition-transform">
                         <Wallet size={100} />
@@ -264,7 +260,7 @@ export default function Billing() {
 
             {/* Main Content Tabs */}
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-6">
+                <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-6 no-print">
                     <TabsList className="bg-white p-1 h-12 rounded-xl border border-slate-200/60 shadow-sm w-full sm:w-auto">
                         <TabsTrigger value="invoice" className="px-6 h-10 rounded-lg data-[state=active]:bg-indigo-50 data-[state=active]:text-indigo-600 font-semibold text-slate-500">
                             รายการใบแจ้งหนี้
@@ -598,7 +594,7 @@ export default function Billing() {
                     </TabsContent>
 
                     <TabsContent value="summary">
-                        <Card className="border-none shadow-sm rounded-2xl bg-white overflow-hidden p-8 print:p-0 print:shadow-none">
+                        <Card className="border-none shadow-sm rounded-2xl bg-white overflow-hidden p-8 print:p-0 print:shadow-none printable-area">
                             <div className="flex justify-between items-start mb-6">
                                 <div>
                                     <h2 className="text-2xl font-bold text-slate-900 mb-2">สรุปค่าน้ำ,ค่าไฟ</h2>
@@ -704,7 +700,7 @@ export default function Billing() {
 
                             <div className="mt-8 flex justify-end print:hidden">
                                 <Button
-                                    onClick={() => window.print()}
+                                    onClick={() => navigate(`/reports/meter-summary?month=${encodeURIComponent(monthFilter)}&building=${selectedBuilding}`)}
                                     className="bg-slate-900 text-white hover:bg-slate-800 rounded-xl px-6 h-10 shadow-lg shadow-slate-200"
                                 >
                                     <Printer size={18} className="mr-2" />
