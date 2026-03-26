@@ -15,7 +15,7 @@
   },
   "build": {
     "appId": "com.apartment.app",
-    "productName": "Apartment Manager",
+    "productName": "ตวงเงินแมนชั่น",
     "directories": {
       "output": "release"
     },
@@ -24,11 +24,23 @@
       "electron/**/*"
     ],
     "mac": {
+      "icon": "build/icon.png",
       "category": "public.app-category.business",
       "target": [
         "dmg",
         "zip"
       ]
+    },
+    "win": {
+      "icon": "build/icon.png",
+      "target": [
+        "nsis"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true
     }
   },
   "dependencies": {

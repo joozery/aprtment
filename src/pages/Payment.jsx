@@ -193,7 +193,7 @@ export default function PaymentPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
                     {pendingBills.map(bill => (
                         <motion.div
-                            key={bill.room}
+                            key={bill.id}
                             initial={{ opacity: 0, y: 10 }}
                             animate={{ opacity: 1, y: 0 }}
                             whileHover={{ y: -4, shadow: 'lg' }}

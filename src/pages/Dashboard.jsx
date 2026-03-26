@@ -14,7 +14,8 @@ import {
     FileText,
     Wrench,
     Package,
-    MoreHorizontal
+    MoreHorizontal,
+    Droplets
 } from 'lucide-react';
 import {
     Card,
@@ -85,7 +86,7 @@ const QuickAction = ({ icon: Icon, label, onClick, color }) => (
 );
 
 export default function Dashboard() {
-    const { tenants, billing, maintenance, incomeHistory, buildings } = useApp();
+    const { tenants, billing, maintenance, incomeHistory, buildings, settings } = useApp();
     const navigate = useNavigate();
 
     // Calculations
@@ -106,6 +107,12 @@ export default function Dashboard() {
     const currentMonthIncome = incomeHistory[incomeHistory.length - 1]?.income || 0;
     const lastMonthIncome = incomeHistory[incomeHistory.length - 2]?.income || 1;
     const growthRate = ((currentMonthIncome - lastMonthIncome) / lastMonthIncome * 100).toFixed(1);
+
+    // Utility units calculation
+    const totalElectricUnits = billing.reduce((acc, curr) => acc + (curr.electric || 0), 0);
+    const totalWaterUnits = billing.reduce((acc, curr) => acc + (curr.water || 0), 0);
+    const totalElectricCost = billing.reduce((acc, curr) => acc + ((curr.electric || 0) * (settings?.electricRate || 11)), 0);
+    const totalWaterCost = billing.reduce((acc, curr) => acc + ((curr.water || 0) * (settings?.waterRate || 35)), 0);
 
     return (
         <div className="space-y-8 pb-10 font-sans min-h-screen bg-[#F8FAFC]/50">
@@ -145,7 +152,7 @@ export default function Dashboard() {
                     value={`฿${pendingIncome.toLocaleString()}`}
                     icon={Clock}
                     trend="down"
-                    trendValue="3 บิล"
+                    trendValue={`${billing.filter(b => b.status !== "ชำระแล้ว").length} บิล`}
                     color="bg-amber-500"
                     delay={0.2}
                 />
@@ -253,16 +260,16 @@ export default function Dashboard() {
                                 <div className="space-y-4 mt-2">
                                     <div className="flex justify-between items-center text-sm">
                                         <span className="text-slate-500 font-medium">ความคืบหน้าเดือนนี้</span>
-                                        <span className="text-slate-900 font-bold">{Math.round((billing.length / tenants.length) * 100)}%</span>
+                                        <span className="text-slate-900 font-bold">{tenants.length > 0 ? Math.round((billing.length / tenants.length) * 100) : 0}%</span>
                                     </div>
                                     <div className="h-2.5 w-full bg-slate-100 rounded-full overflow-hidden">
                                         <div
                                             className="h-full bg-amber-500 rounded-full transition-all duration-1000"
-                                            style={{ width: `${(billing.length / tenants.length) * 100}%` }}
+                                            style={{ width: `${tenants.length > 0 ? (billing.length / tenants.length) * 100 : 0}%` }}
                                         ></div>
                                     </div>
                                     <p className="text-xs text-slate-400 bg-slate-50 p-3 rounded-lg border border-slate-100">
-                                        เหลืออีก {tenants.length - billing.length} ห้องที่ยังไม่ได้จดมิเตอร์หรือสร้างบิล
+                                        เหลืออีก {Math.max(0, tenants.length - billing.length)} ห้องที่ยังไม่ได้จดมิเตอร์หรือสร้างบิล
                                     </p>
                                     <Button onClick={() => navigate('/billing')} variant="outline" className="w-full rounded-xl font-bold text-slate-600">
                                         จัดการมิเตอร์
@@ -357,30 +364,33 @@ export default function Dashboard() {
                             <div className="space-y-1">
                                 <div className="flex justify-between text-sm opacity-80">
                                     <span>รายรับจริง</span>
-                                    <span>{Math.round((paidIncome / (paidIncome + pendingIncome)) * 100)}%</span>
+                                    <span>{paidIncome + pendingIncome > 0 ? Math.round((paidIncome / (paidIncome + pendingIncome)) * 100) : 0}%</span>
                                 </div>
                                 <div className="h-2 bg-white/10 rounded-full overflow-hidden">
-                                    <div className="h-full bg-emerald-500 w-3/4 rounded-full shadow-[0_0_10px_theme(colors.emerald.500)]"></div>
+                                    <div
+                                        className="h-full bg-emerald-500 rounded-full shadow-[0_0_10px_theme(colors.emerald.500)]"
+                                        style={{ width: `${paidIncome + pendingIncome > 0 ? (paidIncome / (paidIncome + pendingIncome)) * 100 : 0}%` }}
+                                    ></div>
                                 </div>
                                 <div className="flex justify-between items-end mt-1">
                                     <span className="text-2xl font-bold">฿{paidIncome.toLocaleString()}</span>
-                                    <span className="text-xs text-slate-400">เป้าหมาย: ฿1.2M</span>
+                                    <span className="text-xs text-slate-400">ค้างชำระ: ฿{pendingIncome.toLocaleString()}</span>
                                 </div>
                             </div>
 
                             <div className="pt-4 border-t border-white/10">
                                 <div className="flex items-center justify-between mb-2">
                                     <span className="text-sm font-medium text-slate-300">ค่าสาธารณูปโภค</span>
-                                    <span className="text-xs bg-white/10 px-2 py-1 rounded text-white">ยอดรวม</span>
+                                    <span className="text-xs bg-white/10 px-2 py-1 rounded text-white">ยอดรวมยูนิต</span>
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
-                                        <p className="text-xs text-slate-400">ค่าไฟ (25 หน่วย)</p>
-                                        <p className="font-bold text-lg">฿52,400</p>
+                                        <p className="text-xs text-slate-400">ค่าไฟ ({totalElectricUnits.toLocaleString()} หน่วย)</p>
+                                        <p className="font-bold text-lg">฿{totalElectricCost.toLocaleString()}</p>
                                     </div>
                                     <div>
-                                        <p className="text-xs text-slate-400">ค่าน้ำ (18 หน่วย)</p>
-                                        <p className="font-bold text-lg">฿12,800</p>
+                                        <p className="text-xs text-slate-400">ค่าน้ำ ({totalWaterUnits.toLocaleString()} หน่วย)</p>
+                                        <p className="font-bold text-lg">฿{totalWaterCost.toLocaleString()}</p>
                                     </div>
                                 </div>
                             </div>

@@ -3,8 +3,7 @@ const mongoose = require('mongoose');
 const roomSchema = new mongoose.Schema({
     number: {
         type: String,
-        required: true,
-        unique: true // 1101, 2101
+        required: true
     },
     buildingId: {
         type: mongoose.Schema.Types.ObjectId,
@@ -39,5 +38,8 @@ const roomSchema = new mongoose.Schema({
 }, {
     timestamps: true
 });
+
+// Ensure room number is unique WITHIN a building, not across all buildings
+roomSchema.index({ buildingId: 1, number: 1 }, { unique: true });
 
 module.exports = mongoose.model('Room', roomSchema);

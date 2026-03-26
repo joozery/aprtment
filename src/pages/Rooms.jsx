@@ -77,12 +77,19 @@ export default function Rooms() {
     }));
 
     // Filter logic
-    const filteredRooms = allRooms.filter(room => {
-        const matchesSearch = room.number.includes(searchQuery) ||
-            (room.tenant && room.tenant.name.toLowerCase().includes(searchQuery.toLowerCase()));
-        const matchesFilter = filterStatus === 'all' || room.status === filterStatus;
-        return matchesSearch && matchesFilter;
-    });
+    const filteredRooms = useMemo(() => {
+        return allRooms
+            .filter(room => {
+                const matchesSearch = room.number.includes(searchQuery) ||
+                    (room.tenant && room.tenant.name.toLowerCase().includes(searchQuery.toLowerCase()));
+                const matchesFilter = filterStatus === 'all' || room.status === filterStatus;
+                return matchesSearch && matchesFilter;
+            })
+            .sort((a, b) => {
+                // Numeric sort: 1101 < 1201...
+                return parseInt(a.number) - parseInt(b.number);
+            });
+    }, [allRooms, searchQuery, filterStatus]);
 
     // Stats
     const totalRooms = allRooms.length;
@@ -243,6 +250,11 @@ export default function Rooms() {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto">
+                    <div className="hidden sm:flex items-center gap-2 px-4 border-r border-slate-100 mr-2 h-10">
+                        <Badge variant="secondary" className="bg-indigo-50 text-indigo-600 border-none font-bold px-3 py-1.5 h-auto text-sm">
+                            ทั้งหมด {filteredRooms.length} ห้อง
+                        </Badge>
+                    </div>
                     <div className="flex p-1 bg-slate-100 rounded-xl mr-2">
                         {['all', 'vacant', 'occupied'].map((status) => (
                             <button
@@ -305,7 +317,7 @@ export default function Rooms() {
                                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6">
                                     {roomsByFloor[floor].map((room, idx) => (
                                         <motion.div
-                                            key={room.number}
+                                            key={room.id || `${room.buildingId}-${room.number}`}
                                             initial={{ opacity: 0, scale: 0.95 }}
                                             animate={{ opacity: 1, scale: 1 }}
                                             transition={{ delay: idx * 0.05 }}
@@ -469,7 +481,7 @@ export default function Rooms() {
                                             }
 
                                             return (
-                                                <tr key={room.number} className={`hover:bg-slate-50/60 transition-colors group ${!room.tenant && 'opacity-60 bg-slate-50/30'}`}>
+                                                <tr key={room.id || `${room.buildingId}-${room.number}`} className={`hover:bg-slate-50/60 transition-colors group ${!room.tenant && 'opacity-60 bg-slate-50/30'}`}>
                                                     <td className="px-6 py-4">
                                                         <div className="flex items-center gap-2">
                                                             <span className="font-bold text-slate-800 text-base">{room.number}</span>

@@ -59,12 +59,14 @@ import {
 import { useApp } from '@/context/AppContext';
 
 export default function Billing() {
-    const { billing, tenants, calculateBill, payBill, meters, setMeters, buildings, settings, updateTenant, deleteBill, updateBillStatus } = useApp();
+    const { billing, tenants, calculateBill, payBill, meters, setMeters, buildings, settings, updateTenant, deleteBill, updateBillStatus, addTenant } = useApp();
     const navigate = useNavigate();
     const [activeTab, setActiveTab] = useState('invoice');
     const [search, setSearch] = useState('');
     const [selectedBuilding, setSelectedBuilding] = useState('all');
     const [statusFilter, setStatusFilter] = useState('all');
+    const [isImportOpen, setIsImportOpen] = useState(false);
+    const [importData, setImportData] = useState('');
 
     // Dynamic Billing Logic
     const waterUnit = settings?.waterRate || 35;
@@ -153,7 +155,12 @@ export default function Billing() {
     const totalCount = baseBilling.filter(b => b.status !== 'ยังไม่ออกบิล').length || 1;
 
     const handleCalculateAll = () => {
-        tenants.forEach(t => {
+        const toCalculate = monthFilter === 'current' ? (selectedBuilding === 'all' ? tenants : tenants.filter(t => String(t.buildingId) === selectedBuilding)) : [];
+        
+        if (toCalculate.length === 0) return;
+        
+        let count = 0;
+        toCalculate.forEach(t => {
             const currentWater = parseFloat(meters.water[t.room] || 0);
             const currentElectric = parseFloat(meters.electric[t.room] || 0);
 
@@ -168,6 +175,34 @@ export default function Billing() {
             }
         });
         setActiveTab('invoice');
+    };
+
+    const handleImportMeters = () => {
+        if (!importData.trim()) return;
+
+        const lines = importData.trim().split('\n');
+        const newMeters = { water: { ...meters.water }, electric: { ...meters.electric } };
+        let count = 0;
+
+        lines.forEach(line => {
+            const parts = line.split('\t');
+            if (parts.length >= 2) {
+                const room = parts[0].trim();
+                const elec = parts[1].trim();
+                const water = parts[2] ? parts[2].trim() : '';
+
+                if (room) {
+                    if (elec) newMeters.electric[room] = elec;
+                    if (water) newMeters.water[room] = water;
+                    count++;
+                }
+            }
+        });
+
+        setMeters(newMeters);
+        setIsImportOpen(false);
+        setImportData('');
+        alert(`นำเข้าข้อมูลมิเตอร์เรียบร้อย ${count} ห้อง`);
     };
 
     return (
@@ -379,7 +414,7 @@ export default function Billing() {
                                                 </TableCell>
                                             </TableRow>
                                         ) : filteredBilling.map((row) => (
-                                            <TableRow key={row.room} className="group hover:bg-slate-50/50 transition-colors border-slate-50">
+                                            <TableRow key={row.id} className="group hover:bg-slate-50/50 transition-colors border-slate-50">
                                                 <TableCell className="pl-6 font-bold text-slate-700">{row.room}</TableCell>
                                                 <TableCell>
                                                     <div className="flex flex-col">
@@ -475,6 +510,48 @@ export default function Billing() {
                     </TabsContent>
 
                     <TabsContent value="meter">
+                        <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
+                            <div className="flex items-center gap-3">
+                                <Badge variant="outline" className="bg-white border-slate-200 text-slate-500 font-bold px-3 py-1.5 h-auto">
+                                    <Zap size={14} className="mr-2 text-amber-500" /> จดมิเตอร์ประจำเดือน
+                                </Badge>
+                                <span className="text-sm font-medium text-slate-400">กรุณากรอกเลขมิเตอร์ปัจจุบันเพื่อใช้คำนวณบิล</span>
+                            </div>
+                            <div className="flex gap-2">
+                                <Dialog open={isImportOpen} onOpenChange={setIsImportOpen}>
+                                    <DialogTrigger asChild>
+                                        <Button variant="outline" className="h-9 px-4 rounded-xl border-slate-200 bg-white font-bold text-slate-600 premium-shadow text-xs">
+                                            <FileDown size={14} className="mr-2" /> นำเข้าจาก Excel (TSV)
+                                        </Button>
+                                    </DialogTrigger>
+                                    <DialogContent className="sm:max-w-[500px] bg-white rounded-3xl p-8 border-none premium-shadow">
+                                        <DialogHeader>
+                                            <DialogTitle className="text-2xl font-bold text-slate-800 tracking-tight">นำเข้ามิเตอร์แบบรวดเร็ว</DialogTitle>
+                                            <DialogDescription className="text-slate-500 font-medium">คัดลอกข้อมูลจาก Excel มาวางที่นี่ (คอลัมน์: เลขห้อง, มิเตอร์ไฟ, มิเตอร์น้ำ)</DialogDescription>
+                                        </DialogHeader>
+                                        <div className="space-y-6 pt-4">
+                                            <textarea
+                                                className="w-full h-48 p-4 rounded-2xl bg-slate-50 border-none focus:ring-2 focus:ring-indigo-100 font-mono text-sm"
+                                                placeholder="1101	4520	320&#10;1102	4610	330"
+                                                value={importData}
+                                                onChange={(e) => setImportData(e.target.value)}
+                                            />
+                                            <div className="bg-indigo-50/50 p-4 rounded-2xl border border-indigo-100/50 text-xs text-indigo-700 font-medium">
+                                                💡 รูปแบบ: เลขห้อง [Tab] มิเตอร์ไฟ [Tab] มิเตอร์น้ำ (ถ้ามี)
+                                            </div>
+                                            <DialogFooter>
+                                                <Button onClick={handleImportMeters} className="w-full bg-slate-900 text-white font-bold h-11 rounded-xl shadow-lg">ยืนยันนำเข้าข้อมูล</Button>
+                                            </DialogFooter>
+                                        </div>
+                                    </DialogContent>
+                                </Dialog>
+
+                                <Button onClick={handleCalculateAll} className="h-9 px-4 rounded-xl bg-slate-900 text-white font-bold shadow-lg shadow-slate-200 text-xs">
+                                    <Plus size={14} className="mr-2" /> ออกบิลครั้งเดียวทั้งหมด
+                                </Button>
+                            </div>
+                        </div>
+
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                             {['water', 'electric'].map((type) => (
                                 <Card key={type} className="border-none shadow-sm rounded-2xl bg-white overflow-hidden">
@@ -533,7 +610,7 @@ export default function Billing() {
                                                     }
 
                                                     return (
-                                                        <TableRow key={item.room} className="border-slate-50 hover:bg-slate-50/50 transition-colors">
+                                                        <TableRow key={item.id} className="border-slate-50 hover:bg-slate-50/50 transition-colors">
                                                             <TableCell className="pl-6 font-bold text-slate-700">
                                                                 <div>{item.room}</div>
                                                                 <div className="text-xs text-slate-400 font-medium">{item.name}</div>
@@ -668,7 +745,7 @@ export default function Billing() {
                                             }
 
                                             return (
-                                                <TableRow key={item.room} className="border-b border-slate-100 hover:bg-slate-50/50">
+                                                <TableRow key={item.id} className="border-b border-slate-100 hover:bg-slate-50/50">
                                                     <TableCell className="font-bold text-slate-700">{item.room}</TableCell>
                                                     <TableCell className="font-medium text-slate-600">{item.name}</TableCell>
 

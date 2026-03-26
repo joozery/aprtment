@@ -14,6 +14,7 @@ app.use('/api/auth', require('./routes/auth'));
 app.use('/api/buildings', require('./routes/buildings'));
 app.use('/api/tenants', require('./routes/tenants'));
 app.use('/api/billing', require('./routes/billing'));
+app.use('/api/rooms', require('./routes/rooms'));
 app.use('/api/settings', require('./routes/settings'));
 // app.use('/api/maintenance', require('./routes/maintenance'));
 

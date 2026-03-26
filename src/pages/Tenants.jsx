@@ -14,7 +14,9 @@ import {
     Calendar,
     ShieldCheck,
     Settings,
-    Edit3
+    Edit3,
+    Zap,
+    Droplets
 } from 'lucide-react';
 import {
     Table,
@@ -46,6 +48,17 @@ import {
 } from "@/components/ui/select";
 import { useApp } from '@/context/AppContext';
 import { useState, useEffect } from 'react';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { useNavigate } from 'react-router-dom';
 
 const StatusBadge = ({ status }) => {
     const configs = {
@@ -63,25 +76,12 @@ const StatusBadge = ({ status }) => {
     );
 };
 
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-    DialogTrigger,
-} from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import { useNavigate } from 'react-router-dom';
-
-// ... StatusBadge component ...
-
 export default function Tenants() {
     const { tenants, addTenant, removeTenant, updateTenant, getRoomInfo, buildings, getRoomsByBuilding } = useApp();
     const navigate = useNavigate();
     const [search, setSearch] = useState('');
     const [filterStatus, setFilterStatus] = useState('all');
+    const [filterBuilding, setFilterBuilding] = useState('all');
     const [isAddOpen, setIsAddOpen] = useState(false);
     const [isEditMode, setIsEditMode] = useState(false);
     const [newTenant, setNewTenant] = useState({ room: '', name: '', rent: 4500, status: 'ปกติ' });
@@ -91,6 +91,10 @@ export default function Tenants() {
 
     // New state for selecting building when adding tenant
     const [filterBuildingId, setFilterBuildingId] = useState('');
+
+    // Pagination state
+    const [currentPage, setCurrentPage] = useState(1);
+    const itemsPerPage = 20;
 
     useEffect(() => {
         if (!filterBuildingId && buildings.length > 0) {
@@ -143,8 +147,57 @@ export default function Tenants() {
     const filteredTenants = tenants.filter(t => {
         const matchesSearch = t.name.toLowerCase().includes(search.toLowerCase()) || t.room.includes(search);
         const matchesStatus = filterStatus === 'all' || t.status === filterStatus;
-        return matchesSearch && matchesStatus;
+        const matchesBuilding = filterBuilding === 'all' || String(t.buildingId) === String(filterBuilding);
+        return matchesSearch && matchesStatus && matchesBuilding;
+    }).sort((a, b) => {
+        const bA = buildings.find(bu => String(bu.id || bu._id) === String(a.buildingId))?.name || '';
+        const bB = buildings.find(bu => String(bu.id || bu._id) === String(b.buildingId))?.name || '';
+        if (bA !== bB) return bA.localeCompare(bB);
+        return parseInt(a.room) - parseInt(b.room);
     });
+
+    const totalPages = Math.ceil(filteredTenants.length / itemsPerPage);
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const paginatedTenants = filteredTenants.slice(startIndex, startIndex + itemsPerPage);
+
+    // Reset to page 1 when filters change
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [filterStatus, filterBuilding, search]);
+
+    const exportToCSV = () => {
+        const headers = ['ตึก', 'เลขห้อง', 'ชื่อ', 'เบอร์โทร', 'ค่าเช่า', 'สถานะ', 'วันที่เริ่มสัญญา', 'วันหมดสัญญา', 'มิเตอร์ไฟล่าสุด', 'มิเตอร์น้ำล่าสุด'];
+        const csvRows = [];
+        // Add BOM for UTF-8 compatibility
+        csvRows.push('\uFEFF' + headers.join(','));
+
+        filteredTenants.forEach(t => {
+            const buildingName = buildings.find(bu => String(bu.id || bu._id) === String(t.buildingId))?.name || '-';
+            const row = [
+                `"${buildingName}"`,
+                `"${t.room}"`,
+                `"${t.name}"`,
+                `"${t.phone || '-'}"`,
+                t.rent,
+                `"${t.status}"`,
+                `"${t.date}"`,
+                `"${t.expiry}"`,
+                t.lastElectricMeter || 0,
+                t.lastWaterMeter || 0
+            ];
+            csvRows.push(row.join(','));
+        });
+
+        const csvContent = csvRows.join('\n');
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        link.setAttribute('download', `รายชื่อผู้เช่า_${new Date().toISOString().split('T')[0]}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
 
     return (
         <div className="space-y-10 pb-10">
@@ -157,7 +210,7 @@ export default function Tenants() {
                     </p>
                 </div>
                 <div className="flex gap-4">
-                    <Button variant="outline" className="h-9 px-4 rounded-xl border-slate-200 bg-white font-bold text-slate-600 premium-shadow group text-sm">
+                    <Button onClick={exportToCSV} variant="outline" className="h-9 px-4 rounded-xl border-slate-200 bg-white font-bold text-slate-600 premium-shadow group text-sm">
                         <Download size={14} className="mr-2 opacity-50 group-hover:opacity-100 transition-opacity" />
                         ส่งออกรายชื่อ
                     </Button>
@@ -351,7 +404,7 @@ export default function Tenants() {
                 <CardHeader className="p-6 pb-4 flex flex-col md:flex-row items-center justify-between gap-4 bg-slate-50/50">
                     <div className="space-y-1">
                         <CardTitle className="text-lg font-semibold text-slate-800 tracking-tight">รายชื่อผู้เช่าปัจจุบัน</CardTitle>
-                        <CardDescription className="font-medium text-slate-400 text-xs">เรียงตามหมายเลขห้อง (101 - 508)</CardDescription>
+                        <CardDescription className="font-medium text-slate-400 text-xs">เรียงตามตึกและหมายเลขห้อง</CardDescription>
                     </div>
                     <div className="flex items-center gap-3 w-full md:w-auto">
                         <div className="relative flex-1 md:w-64 group">
@@ -359,15 +412,38 @@ export default function Tenants() {
                             <Input
                                 value={search}
                                 onChange={(e) => setSearch(e.target.value)}
-                                placeholder="ค้นหาชื่อ, เลขห้อง, เบอร์โทร..."
+                                placeholder="ค้นหาชื่อ, เลขห้อง..."
                                 className="pl-9 h-9 bg-white border-slate-200 rounded-xl focus-visible:ring-2 focus-visible:ring-primary/10 transition-all font-medium text-slate-700 text-sm"
                             />
                         </div>
+
+                        {/* Building Filter */}
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                 <Button variant="outline" className="h-9 px-4 rounded-xl border-slate-200 bg-white text-slate-600 font-bold group text-sm">
                                     <Filter size={14} className="mr-2 opacity-50 group-hover:opacity-100 transition-opacity" />
-                                    กรอง: {filterStatus === 'all' ? 'สถานะทั้งหมด' : filterStatus}
+                                    ตึก: {filterBuilding === 'all' ? 'ทั้งหมด' : buildings.find(b => String(b.id) === String(filterBuilding))?.name}
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-48 rounded-xl shadow-lg border-slate-100">
+                                <DropdownMenuItem onClick={() => setFilterBuilding('all')} className="font-medium cursor-pointer text-slate-800">
+                                    ทุกตึก
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                {buildings.map(b => (
+                                    <DropdownMenuItem key={b.id} onClick={() => setFilterBuilding(b.id)} className="font-medium cursor-pointer text-slate-800">
+                                        {b.name}
+                                    </DropdownMenuItem>
+                                ))}
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+
+                        {/* Status Filter */}
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="outline" className="h-9 px-4 rounded-xl border-slate-200 bg-white text-slate-600 font-bold group text-sm">
+                                    <Filter size={14} className="mr-2 opacity-50 group-hover:opacity-100 transition-opacity" />
+                                    สถานะ: {filterStatus === 'all' ? 'ทั้งหมด' : filterStatus}
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-48 rounded-xl shadow-lg border-slate-100">
@@ -397,15 +473,16 @@ export default function Tenants() {
                                     <TableHead className="w-[100px] px-6 py-4 font-bold text-slate-800 uppercase tracking-widest text-[10px]">เลขห้อง <ArrowUpDown size={10} className="inline ml-1 opacity-30" /></TableHead>
                                     <TableHead className="font-bold text-slate-800 uppercase tracking-widest text-[10px] py-4">ผู้เช่า / รายละเอียด</TableHead>
                                     <TableHead className="font-bold text-slate-800 uppercase tracking-widest text-[10px] py-4 text-center">สถานะปัจจุบัน</TableHead>
+                                    <TableHead className="font-bold text-slate-800 uppercase tracking-widest text-[10px] py-4"><Zap size={10} className="inline mr-1 opacity-30" /> มิเตอร์ไฟ/น้ำ</TableHead>
                                     <TableHead className="font-bold text-slate-800 uppercase tracking-widest text-[10px] py-4"><Calendar size={10} className="inline mr-1 opacity-30" /> ระยะสัญญา</TableHead>
                                     <TableHead className="font-bold text-slate-800 uppercase tracking-widest text-[10px] py-4 text-right">ค่าเช่าสุทธิ</TableHead>
                                     <TableHead className="w-[80px]"></TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {filteredTenants.map((tenant, idx) => (
+                                {paginatedTenants.map((tenant, idx) => (
                                     <motion.tr
-                                        key={tenant.room}
+                                        key={tenant.id}
                                         initial={{ opacity: 0, y: 10 }}
                                         animate={{ opacity: 1, y: 0 }}
                                         transition={{ delay: idx * 0.05 }}
@@ -413,8 +490,11 @@ export default function Tenants() {
                                     >
                                         <TableCell className="px-6">
                                             <div className="flex items-center gap-2">
-                                                <div className="h-10 w-10 rounded-lg bg-white border border-slate-100 flex flex-col items-center justify-center shadow-sm group-hover:shadow-md group-hover:border-primary/20 transition-all">
-                                                    <span className="text-sm font-bold text-slate-800 leading-none">{tenant.room}</span>
+                                                <div className="h-10 w-12 rounded-lg bg-white border border-slate-100 flex flex-col items-center justify-center shadow-sm group-hover:shadow-md group-hover:border-primary/20 transition-all">
+                                                    <span className="text-xs font-bold text-slate-800 leading-none">{tenant.room}</span>
+                                                    <span className="text-[8px] text-slate-400 mt-1 font-bold">
+                                                        {buildings.find(bu => String(bu.id || bu._id) === String(tenant.buildingId))?.name || '-'}
+                                                    </span>
                                                 </div>
                                             </div>
                                         </TableCell>
@@ -433,6 +513,18 @@ export default function Tenants() {
                                         </TableCell>
                                         <TableCell className="text-center py-4">
                                             <div className="scale-90"><StatusBadge status={tenant.status} /></div>
+                                        </TableCell>
+                                        <TableCell className="py-4">
+                                            <div className="flex flex-col gap-1.5">
+                                                <div className="flex items-center gap-2">
+                                                    <Badge variant="outline" className="text-[9px] h-5 bg-amber-50 text-amber-700 border-amber-100 font-bold px-1.5">
+                                                        <Zap size={8} className="mr-1" /> {tenant.lastElectricMeter?.toLocaleString() || 0}
+                                                    </Badge>
+                                                    <Badge variant="outline" className="text-[9px] h-5 bg-blue-50 text-blue-700 border-blue-100 font-bold px-1.5">
+                                                        <Droplets size={8} className="mr-1" /> {tenant.lastWaterMeter?.toLocaleString() || 0}
+                                                    </Badge>
+                                                </div>
+                                            </div>
                                         </TableCell>
                                         <TableCell className="py-4">
                                             <div className="flex flex-col gap-0.5">
@@ -473,7 +565,7 @@ export default function Tenants() {
                                                     </DropdownMenuItem>
                                                     <DropdownMenuItem
                                                         onClick={() => {
-                                                            setNewTenant(tenant);
+                                                            setNewTenant({ ...tenant });
                                                             setIsEditMode(true);
                                                             setIsAddOpen(true);
                                                         }}
@@ -484,13 +576,16 @@ export default function Tenants() {
                                                     </DropdownMenuItem>
                                                     <DropdownMenuSeparator className="my-2 bg-slate-50" />
                                                     <DropdownMenuItem
-                                                        onClick={() => removeTenant(tenant.id)}
+                                                        onClick={() => {
+                                                            if (window.confirm('ยืนยันการยกเลิกสัญญา?')) {
+                                                                removeTenant(tenant.id);
+                                                            }
+                                                        }}
                                                         className="text-rose-600 gap-3 py-3 px-4 rounded-lg cursor-pointer hover:bg-rose-50 border-none"
                                                     >
                                                         <div className="bg-rose-100 p-2 rounded-lg text-rose-500"><ShieldCheck size={16} /></div>
                                                         <span className="font-bold">ยกเลิกสัญญาถาวร</span>
                                                     </DropdownMenuItem>
-
                                                 </DropdownMenuContent>
                                             </DropdownMenu>
                                         </TableCell>
@@ -499,18 +594,61 @@ export default function Tenants() {
                             </TableBody>
                         </Table>
                     </div>
-                    <div className="p-8 border-t border-slate-50 flex justify-between items-center bg-slate-50/30">
-                        <p className="text-sm font-bold text-slate-400">แสดงผล {filteredTenants.length} จาก {tenants.length} รายชื่อ</p>
+
+                    <div className="p-8 border-t border-slate-50 flex flex-col sm:flex-row justify-between items-center bg-slate-50/30 gap-4">
+                        <p className="text-sm font-bold text-slate-400">
+                            แสดง {startIndex + 1} - {Math.min(startIndex + itemsPerPage, filteredTenants.length)} จาก {filteredTenants.length} รายชื่อ
+                        </p>
 
                         <div className="flex gap-2">
-                            <Button variant="ghost" size="sm" className="rounded-xl font-bold h-10 px-4 disabled:opacity-30" disabled>ก่อนหน้า</Button>
-                            <Button variant="ghost" size="sm" className="rounded-xl font-bold h-10 px-4 bg-white shadow-sm border border-slate-100">1</Button>
-                            <Button variant="ghost" size="sm" className="rounded-xl font-bold h-10 px-4 hover:bg-white hover:shadow-sm">2</Button>
-                            <Button variant="ghost" size="sm" className="rounded-xl font-bold h-10 px-4">ถัดไป</Button>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                disabled={currentPage === 1}
+                                className="rounded-xl font-bold h-10 px-4 disabled:opacity-30 hover:bg-white"
+                            >
+                                ก่อนหน้า
+                            </Button>
+
+                            {totalPages > 0 && Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                                // Simple page window
+                                let pageNum = i + 1;
+                                if (totalPages > 5) {
+                                    if (currentPage > 3) pageNum = currentPage - 2 + i;
+                                    if (pageNum > totalPages - 4) pageNum = totalPages - 4 + i;
+                                }
+                                if (pageNum > totalPages) return null;
+
+                                return (
+                                    <Button
+                                        key={pageNum}
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => setCurrentPage(pageNum)}
+                                        className={`rounded-xl font-bold h-10 px-4 transition-all ${currentPage === pageNum
+                                                ? 'bg-primary text-white shadow-lg shadow-primary/20 hover:bg-primary'
+                                                : 'bg-white shadow-sm border border-slate-100 hover:bg-slate-50'
+                                            }`}
+                                    >
+                                        {pageNum}
+                                    </Button>
+                                );
+                            })}
+
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                                disabled={currentPage === totalPages || totalPages === 0}
+                                className="rounded-xl font-bold h-10 px-4 disabled:opacity-30 hover:bg-white"
+                            >
+                                ถัดไป
+                            </Button>
                         </div>
                     </div>
                 </CardContent>
             </Card>
-        </div >
+        </div>
     );
 }

@@ -1,7 +1,9 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import axios from 'axios';
 
-const API_URL = 'https://apartmentv1.wooyouspace.space/api';
+const API_URL = window.location.hostname === 'localhost' 
+    ? 'http://localhost:5001/api' 
+    : 'https://apartmentv1.wooyouspace.space/api';
 
 const AppContext = createContext();
 
@@ -55,6 +57,7 @@ export const AppProvider = ({ children }) => {
     });
 
     const [billing, setBilling] = useState([]);
+    const [rooms, setRooms] = useState([]);
 
     const [incomeHistory, setIncomeHistory] = useState(() => {
         const saved = localStorage.getItem('smart_income_history');
@@ -77,21 +80,24 @@ export const AppProvider = ({ children }) => {
     useEffect(() => {
         const fetchData = async () => {
             try {
-                const [buildingsRes, tenantsRes, billingRes, settingsRes] = await Promise.all([
+                const [buildingsRes, tenantsRes, billingRes, settingsRes, roomsRes] = await Promise.all([
                     axios.get(`${API_URL}/buildings`),
                     axios.get(`${API_URL}/tenants`),
                     axios.get(`${API_URL}/billing`),
                     axios.get(`${API_URL}/settings`),
+                    axios.get(`${API_URL}/rooms`),
                 ]);
 
                 // MAP _id to id to keep frontend logic from breaking for now
-                const formattedBuildings = buildingsRes.data.data.map(b => ({ ...b, id: b._id }));
-                const formattedTenants = tenantsRes.data.data.map(t => ({ ...t, id: t._id }));
-                const formattedBilling = billingRes.data.data.map(b => ({ ...b, id: b._id }));
+                const formattedBuildings = (buildingsRes.data.data || []).map(b => ({ ...b, id: b._id }));
+                const formattedTenants = (tenantsRes.data.data || []).map(t => ({ ...t, id: t._id }));
+                const formattedBilling = (billingRes.data.data || []).map(b => ({ ...b, id: b._id }));
+                const formattedRooms = (roomsRes.data.data || []).map(r => ({ ...r, id: r._id }));
 
                 setBuildings(formattedBuildings);
                 setTenants(formattedTenants);
                 setBilling(formattedBilling);
+                setRooms(formattedRooms);
 
                 if (settingsRes.data.success) {
                     const s = settingsRes.data.data;
@@ -155,6 +161,44 @@ export const AppProvider = ({ children }) => {
                 setTenants(prev => prev.map(t => t.id === id ? { ...t, ...res.data.data } : t));
                 return { success: true };
             }
+        } catch (err) {
+            console.error(err);
+            return { success: false, error: err.response?.data?.error || err.message };
+        }
+    };
+
+    const bulkImportTenants = async (buildingId, tenantsData) => {
+        try {
+            const res = await axios.post(`${API_URL}/tenants/bulk-import`, { buildingId, tenantsData });
+            if (res.data.success) {
+                // Refresh data
+                const [tenantsRes, buildingsRes, roomsRes] = await Promise.all([
+                    axios.get(`${API_URL}/tenants`),
+                    axios.get(`${API_URL}/buildings`),
+                    axios.get(`${API_URL}/rooms`)
+                ]);
+                setTenants((tenantsRes.data.data || []).map(t => ({ ...t, id: t._id })));
+                setBuildings((buildingsRes.data.data || []).map(b => ({ ...b, id: b._id })));
+                setRooms((roomsRes.data.data || []).map(r => ({ ...r, id: r._id })));
+                return { success: true, data: res.data.data };
+            }
+        } catch (err) {
+            console.error(err);
+            return { success: false, error: err.response?.data?.error || err.message };
+        }
+    };
+
+    const clearBuildingData = async (buildingId) => {
+        try {
+            await axios.delete(`${API_URL}/buildings/${buildingId}/clear-data`);
+            // Refresh
+            const [tenantsRes, roomsRes] = await Promise.all([
+                axios.get(`${API_URL}/tenants`),
+                axios.get(`${API_URL}/rooms`)
+            ]);
+            setTenants((tenantsRes.data.data || []).map(t => ({ ...t, id: t._id })));
+            setRooms((roomsRes.data.data || []).map(r => ({ ...r, id: r._id })));
+            return { success: true };
         } catch (err) {
             console.error(err);
             return { success: false, error: err.response?.data?.error || err.message };
@@ -303,17 +347,27 @@ export const AppProvider = ({ children }) => {
     };
 
     const getAllRooms = () => {
-        const rooms = [];
+        // Priority: actual rooms from DB
+        const dbRooms = rooms.map(r => ({
+            ...r,
+            isOccupied: tenants.some(t => t.room === r.number && t.buildingId === r.buildingId),
+            tenant: tenants.find(t => t.room === r.number && t.buildingId === r.buildingId) || null
+        }));
+
+        if (dbRooms.length > 0) return dbRooms;
+
+        // Fallback for empty DB (legacy generate)
+        const generatedRooms = [];
         buildings.forEach((building, index) => {
             const buildingPrefix = (index + 1).toString();
             for (let f = 1; f <= building.floors; f++) {
                 for (let r = 1; r <= building.roomsPerFloor; r++) {
                     const roomNum = `${buildingPrefix}${f}${r.toString().padStart(2, '0')}`;
-                    rooms.push(getRoomInfo(roomNum, building));
+                    generatedRooms.push(getRoomInfo(roomNum, building));
                 }
             }
         });
-        return rooms;
+        return generatedRooms;
     };
 
     // Building Management Functions
@@ -364,28 +418,12 @@ export const AppProvider = ({ children }) => {
 
     // Get rooms by building
     const getRoomsByBuilding = (buildingId) => {
-        const building = buildings.find(b => b.id === buildingId);
-        if (!building) return [];
-
-        const rooms = [];
-        const buildingIndex = buildings.findIndex(b => b.id === buildingId);
-        const buildingPrefix = (buildingIndex + 1).toString();
-
-        for (let f = 1; f <= building.floors; f++) {
-            for (let r = 1; r <= building.roomsPerFloor; r++) {
-                const roomNum = `${buildingPrefix}${f}${r.toString().padStart(2, '0')}`;
-                const tenant = tenants.find(t => t.room === roomNum && t.buildingId === buildingId);
-                rooms.push({
-                    number: roomNum,
-                    buildingId,
-                    isOccupied: !!tenant,
-                    tenant: tenant || null,
-                    floor: f,
-                    rent: building.defaultRent // use building specific rent
-                });
-            }
-        }
-        return rooms;
+        const roomsList = rooms && rooms.length > 0 ? rooms : getAllRooms();
+        return roomsList.filter(r => r.buildingId === buildingId).map(r => ({
+            ...r,
+            isOccupied: tenants.some(t => t.room === r.number && t.buildingId === buildingId),
+            tenant: tenants.find(t => t.room === r.number && t.buildingId === buildingId) || null
+        }));
     };
 
     return (
@@ -393,10 +431,11 @@ export const AppProvider = ({ children }) => {
             // Buildings & Settings
             buildings, addBuilding, updateBuilding, deleteBuilding,
             settings, updateSettings,
-            getRoomsByBuilding,
+            rooms, getRoomsByBuilding,
+            getAllRooms,
 
             // Tenants
-            tenants, addTenant, removeTenant, updateTenant,
+            tenants, addTenant, removeTenant, updateTenant, bulkImportTenants, clearBuildingData,
 
             // Maintenance
             maintenance, updateMaintenanceStatus, addMaintenance, deleteMaintenance,

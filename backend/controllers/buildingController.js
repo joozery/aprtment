@@ -1,5 +1,32 @@
 const Building = require('../models/Building');
 const Room = require('../models/Room');
+const Tenant = require('../models/Tenant');
+
+// Clear all data for a building (tenants & rooms)
+exports.clearBuildingData = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const building = await Building.findById(id);
+        if (!building) return res.status(404).json({ success: false, error: 'Building not found' });
+
+        // Delete all tenants and rooms
+        await Tenant.deleteMany({ buildingId: id });
+        await Room.deleteMany({ buildingId: id });
+
+        // Optionally re-generate default rooms if building has floors/rooms defined
+        const generatedRooms = [];
+        for (let f = 1; f <= building.floors; f++) {
+            for (let r = 1; r <= building.roomsPerFloor; r++) {
+                // Determine prefix from building count or some other logic
+                // For simplicity, we can use a helper or just skip re-generation and let import handle it
+            }
+        }
+        
+        res.status(200).json({ success: true, message: 'Building data cleared successfully' });
+    } catch (error) {
+        res.status(400).json({ success: false, error: error.message });
+    }
+};
 
 // Create a new Building and auto-generate rooms
 exports.createBuilding = async (req, res) => {

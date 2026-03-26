@@ -45,6 +45,10 @@ const tenantSchema = new mongoose.Schema({
     lastElectricMeter: {
         type: Number,
         default: 0
+    },
+    nationality: {
+        type: String,
+        default: ''
     }
 }, {
     timestamps: true
