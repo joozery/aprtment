@@ -18,6 +18,7 @@ export default function Buildings() {
     const [editingBuilding, setEditingBuilding] = useState(null);
     const [formData, setFormData] = useState({
         name: '',
+        prefix: '',
         floors: 4,
         roomsPerFloor: 8,
         defaultRent: 4500,
@@ -111,7 +112,7 @@ export default function Buildings() {
     };
 
     const resetForm = () => {
-        setFormData({ name: '', floors: 4, roomsPerFloor: 8, defaultRent: 4500, address: '', taxId: '' });
+        setFormData({ name: '', prefix: '', floors: 4, roomsPerFloor: 8, defaultRent: 4500, address: '', taxId: '' });
         setEditingBuilding(null);
         setIsDialogOpen(false);
     };
@@ -120,6 +121,7 @@ export default function Buildings() {
         setEditingBuilding(building);
         setFormData({
             name: building.name,
+            prefix: building.prefix || '',
             floors: building.floors,
             roomsPerFloor: building.roomsPerFloor,
             defaultRent: building.defaultRent,
@@ -221,6 +223,15 @@ export default function Buildings() {
                                                 required
                                             />
                                         </div>
+                                        <div className="space-y-2">
+                                            <Label htmlFor="prefix">เลขนำหน้าห้อง (เช่น A, B หรือเลข 1)</Label>
+                                            <Input
+                                                id="prefix"
+                                                value={formData.prefix}
+                                                onChange={(e) => setFormData({ ...formData, prefix: e.target.value })}
+                                                placeholder="ถ้าว่างจะใช้ลำดับตึกเป็นหลัก"
+                                            />
+                                        </div>
                                         <div className="grid grid-cols-2 gap-4">
                                             <div className="space-y-2">
                                                 <Label htmlFor="floors">จำนวนชั้น</Label>
@@ -309,8 +320,9 @@ export default function Buildings() {
                                         </div>
                                         <div>
                                             <CardTitle className="text-lg">{building.name}</CardTitle>
-                                            <CardDescription className="text-xs mt-1">
-                                                {building.floors * building.roomsPerFloor} ห้องทั้งหมด
+                                            <CardDescription className="text-xs mt-1 flex flex-col gap-1">
+                                                <span>{building.floors * building.roomsPerFloor} ห้องทั้งหมด</span>
+                                                <span className="text-indigo-600 font-bold bg-indigo-50 w-fit px-2 py-0.5 rounded">Prefix: {building.prefix || (index + 1)}</span>
                                             </CardDescription>
                                         </div>
                                     </div>

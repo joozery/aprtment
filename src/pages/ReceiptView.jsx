@@ -129,39 +129,38 @@ export default function ReceiptView() {
                     @import url('https://fonts.googleapis.com/css2?family=Sarabun:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap');
                     @media print {
                         @page { 
-                            size: A4 landscape; 
-                            margin: 15mm;
-                        }
-                        * {
-                            background: white !important;
-                            -webkit-print-color-adjust: exact !important;
-                            print-color-adjust: exact !important;
+                            size: portrait; 
+                            margin: 10mm;
                         }
                         body { 
                             background: white !important; 
                             margin: 0; 
                             padding: 0; 
+                            -webkit-print-color-adjust: exact !important;
+                            print-color-adjust: exact !important;
                         }
-                        .print-container { 
-                            width: 100%; 
-                            max-width: none; 
-                            margin: 0; 
-                            padding: 20mm 15mm !important; /* Added left-right padding */
+                        .printable-area { 
+                            width: 100% !important; 
+                            max-width: none !important; 
+                            margin: 0 !important; 
+                            padding: 10mm !important;
                             background: white !important;
                             box-shadow: none !important;
                             border: none !important;
+                            display: block !important;
+                            visibility: visible !important;
                         }
-                        .no-print { display: none !important; }
+                        .no-print, button, nav, aside { display: none !important; }
                     }
                     @media screen {
-                        .print-container {
-                            box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
+                        .printable-area {
+                            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
                         }
                     }
                 `}
             </style>
 
-            <div className="print-container max-w-[240mm] mx-auto bg-white p-10" style={{ fontFamily: "'Sarabun', sans-serif" }}>
+            <div className="printable-area max-w-[210mm] mx-auto bg-white p-12 relative" style={{ fontFamily: "'Sarabun', sans-serif" }}>
                 {/* Header */}
                 <div className="flex justify-between items-start mb-6">
                     <div>

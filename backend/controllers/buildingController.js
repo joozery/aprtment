@@ -1,6 +1,7 @@
 const Building = require('../models/Building');
 const Room = require('../models/Room');
 const Tenant = require('../models/Tenant');
+const Invoice = require('../models/Invoice');
 
 // Clear all data for a building (tenants & rooms)
 exports.clearBuildingData = async (req, res) => {
@@ -41,6 +42,7 @@ exports.createBuilding = async (req, res) => {
 
         const building = new Building({
             name,
+            prefix: req.body.prefix || '',
             floors,
             roomsPerFloor,
             defaultRent,
@@ -53,12 +55,12 @@ exports.createBuilding = async (req, res) => {
 
         const generatedRooms = [];
 
-        // Generate rooms logic: 4-digits: [BuildingIndex][Floor][RoomNumber] 
-        // Ex: building=1, f=1, r=1 => 1101
+        // Generate rooms logic using prefix or buildingIndex
+        const actualPrefix = building.prefix || buildingIndex;
         for (let f = 1; f <= floors; f++) {
             for (let r = 1; r <= roomsPerFloor; r++) {
-                // Convert numbers to 4-digit format string.
-                const roomNum = `${buildingIndex}${f}${r.toString().padStart(2, '0')}`;
+                // Convert numbers to formatted room string.
+                const roomNum = `${actualPrefix}${f}${r.toString().padStart(2, '0')}`;
 
                 generatedRooms.push({
                     number: roomNum,
@@ -98,6 +100,9 @@ exports.updateBuilding = async (req, res) => {
         const { id } = req.params;
         const updates = req.body;
 
+        const oldBuilding = await Building.findById(id);
+        const oldPrefix = oldBuilding?.prefix || '';
+
         const building = await Building.findByIdAndUpdate(id, updates, {
             new: true,
             runValidators: true
@@ -105,6 +110,33 @@ exports.updateBuilding = async (req, res) => {
 
         if (!building) {
             return res.status(404).json({ success: false, error: 'Building not found' });
+        }
+
+        // Automatically synchronize all dependent rooms, tenants, and bills
+        // We do this aggressively because the DB might have been out-of-sync before this feature existed!
+        const actualPrefix = building.prefix || '';
+        const roomsInBuilding = await Room.find({ buildingId: id });
+        
+        for (const r of roomsInBuilding) {
+            // Room sequence is the last 2 digits for cases where roomsPerFloor < 100
+            const sequenceNum = r.number.slice(-2);
+            
+            // If prefix is completely empty, it shouldn't fallback to '' if it was supposed to be buildingIndex
+            // But since the user explicitly wants '3', actualPrefix is '3'. 
+            // If actualPrefix is empty, it uses fallback from index. 
+            // We use actualPrefix directly here since it matches frontend logic.
+            const expectedRoomName = `${actualPrefix}${r.floor}${sequenceNum}`;
+
+            if (expectedRoomName !== r.number) {
+                const oldRoomName = r.number;
+                // Update Tenants and Invoices using the old room number to the new one
+                await Tenant.updateMany({ buildingId: id, room: oldRoomName }, { $set: { room: expectedRoomName } });
+                await Invoice.updateMany({ buildingId: id, room: oldRoomName }, { $set: { room: expectedRoomName } });
+                
+                // Update Room Document
+                r.number = expectedRoomName;
+                await r.save();
+            }
         }
 
         res.status(200).json({ success: true, data: building });

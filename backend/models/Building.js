@@ -28,6 +28,10 @@ const buildingSchema = new mongoose.Schema({
     taxId: {
         type: String,
         default: '' // เลขประจำตัวผู้เสียภาษี (ถ้ามี)
+    },
+    prefix: {
+        type: String,
+        default: '' // เลขนำหน้าห้อง (เช่น A, B หรือเลข 1, 2)
     }
 }, {
     timestamps: true

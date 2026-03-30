@@ -1,9 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import axios from 'axios';
 
-const API_URL = window.location.hostname === 'localhost' 
-    ? 'http://localhost:5001/api' 
-    : 'https://apartmentv1.wooyouspace.space/api';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
 
 const AppContext = createContext();
 
@@ -347,27 +345,33 @@ export const AppProvider = ({ children }) => {
     };
 
     const getAllRooms = () => {
-        // Priority: actual rooms from DB
-        const dbRooms = rooms.map(r => ({
-            ...r,
-            isOccupied: tenants.some(t => t.room === r.number && t.buildingId === r.buildingId),
-            tenant: tenants.find(t => t.room === r.number && t.buildingId === r.buildingId) || null
-        }));
+        const allSystemRooms = [];
 
-        if (dbRooms.length > 0) return dbRooms;
-
-        // Fallback for empty DB (legacy generate)
-        const generatedRooms = [];
         buildings.forEach((building, index) => {
-            const buildingPrefix = (index + 1).toString();
-            for (let f = 1; f <= building.floors; f++) {
-                for (let r = 1; r <= building.roomsPerFloor; r++) {
-                    const roomNum = `${buildingPrefix}${f}${r.toString().padStart(2, '0')}`;
-                    generatedRooms.push(getRoomInfo(roomNum, building));
+            const buildingRooms = rooms.filter(r => r.buildingId === building.id);
+            const actualPrefix = building.prefix || (index + 1).toString();
+
+            if (buildingRooms.length > 0) {
+                // If this building has rooms in DB, use them
+                buildingRooms.forEach(r => {
+                    allSystemRooms.push({
+                        ...r,
+                        isOccupied: tenants.some(t => t.room === r.number && t.buildingId === r.buildingId),
+                        tenant: tenants.find(t => t.room === r.number && t.buildingId === r.buildingId) || null
+                    });
+                });
+            } else {
+                // Fallback: generate default rooms for this building
+                for (let f = 1; f <= building.floors; f++) {
+                    for (let r = 1; r <= building.roomsPerFloor; r++) {
+                        const roomNum = `${actualPrefix}${f}${r.toString().padStart(2, '0')}`;
+                        allSystemRooms.push(getRoomInfo(roomNum, building));
+                    }
                 }
             }
         });
-        return generatedRooms;
+
+        return allSystemRooms;
     };
 
     // Building Management Functions
@@ -384,9 +388,20 @@ export const AppProvider = ({ children }) => {
 
     const updateBuilding = async (id, updates) => {
         try {
+            const oldBuilding = buildings.find(b => b.id === id);
             const res = await axios.put(`${API_URL}/buildings/${id}`, updates);
             if (res.data.success) {
                 setBuildings(prev => prev.map(b => b.id === id ? { ...b, ...updates } : b));
+                
+                // Always refetch to ensure the frontend syncs successfully with automatic fixes
+                const [resRooms, resTenants, resBills] = await Promise.all([
+                    axios.get(`${API_URL}/rooms`),
+                    axios.get(`${API_URL}/tenants`),
+                    axios.get(`${API_URL}/billing`)
+                ]);
+                setRooms((resRooms.data.data || []).map(r => ({ ...r, id: r._id })));
+                setTenants((resTenants.data.data || []).map(t => ({ ...t, id: t._id })));
+                setBilling((resBills.data.data || []).map(b => ({ ...b, id: b._id })));
             }
         } catch (e) {
             console.error(e);
@@ -418,12 +433,8 @@ export const AppProvider = ({ children }) => {
 
     // Get rooms by building
     const getRoomsByBuilding = (buildingId) => {
-        const roomsList = rooms && rooms.length > 0 ? rooms : getAllRooms();
-        return roomsList.filter(r => r.buildingId === buildingId).map(r => ({
-            ...r,
-            isOccupied: tenants.some(t => t.room === r.number && t.buildingId === buildingId),
-            tenant: tenants.find(t => t.room === r.number && t.buildingId === buildingId) || null
-        }));
+        const roomsList = getAllRooms();
+        return roomsList.filter(r => String(r.buildingId) === String(buildingId));
     };
 
     return (
@@ -450,7 +461,6 @@ export const AppProvider = ({ children }) => {
             // Legacy (for backward compatibility)
             roomConfig,
             getRoomInfo,
-            getAllRooms,
             contractConfig, setContractConfig
         }}>
             {children}
