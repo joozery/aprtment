@@ -86,20 +86,26 @@ export const AppProvider = ({ children }) => {
                     axios.get(`${API_URL}/rooms`),
                 ]);
 
-                // MAP _id to id to keep frontend logic from breaking for now
-                const formattedBuildings = (buildingsRes.data.data || []).map(b => ({ ...b, id: b._id }));
-                const formattedTenants = (tenantsRes.data.data || []).map(t => ({ ...t, id: t._id }));
-                const formattedBilling = (billingRes.data.data || []).map(b => ({ ...b, id: b._id }));
-                const formattedRooms = (roomsRes.data.data || []).map(r => ({ ...r, id: r._id }));
+                const uniqueItems = (data) => {
+                    const seen = new Set();
+                    return (data || []).reduce((acc, curr) => {
+                        const id = (curr._id || curr.id)?.toString();
+                        if (id && !seen.has(id)) {
+                            seen.add(id);
+                            acc.push({ ...curr, id });
+                        }
+                        return acc;
+                    }, []);
+                };
 
-                setBuildings(formattedBuildings);
-                setTenants(formattedTenants);
-                setBilling(formattedBilling);
-                setRooms(formattedRooms);
+                setBuildings(uniqueItems(buildingsRes.data.data));
+                setTenants(uniqueItems(tenantsRes.data.data));
+                setBilling(uniqueItems(billingRes.data.data));
+                setRooms(uniqueItems(roomsRes.data.data));
 
                 if (settingsRes.data.success) {
                     const s = settingsRes.data.data;
-                    setSettings(prev => ({ ...prev, ...s }));
+                    setSettings(prev => ({ ...prev, ...(s || {}) }));
                 }
             } catch (err) {
                 console.error('Error fetching data:', err);
