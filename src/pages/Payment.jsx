@@ -215,7 +215,7 @@ export default function PaymentPage() {
                                     <p className="font-semibold text-slate-800 truncate">{bill.name}</p>
                                     <p className="text-xs text-slate-400 mt-0.5">{getMonthLabel(bill.createdAt)}</p>
                                     <div className="mt-4 pt-4 border-t border-slate-100 flex justify-between items-center">
-                                        <span className="text-2xl font-bold text-slate-900">฿{bill.total.toLocaleString()}</span>
+                                        <span className="text-2xl font-bold text-slate-900">฿{(bill.total || 0).toLocaleString()}</span>
                                         <Button size="sm" className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl gap-1.5 text-xs">
                                             <QrCode size={13} /> จ่ายเลย
                                         </Button>
@@ -276,23 +276,23 @@ export default function PaymentPage() {
                                         <div className="bg-slate-50 rounded-2xl p-4 mb-5 space-y-2 text-sm">
                                             <div className="flex justify-between text-slate-600">
                                                 <span>ค่าห้อง</span>
-                                                <span>฿{rent.toLocaleString()}</span>
+                                                <span>฿{(rent || 0).toLocaleString()}</span>
                                             </div>
                                             <div className="flex justify-between text-slate-600">
                                                 <span>ค่าน้ำ ({payingBill.water} หน่วย)</span>
-                                                <span>฿{(payingBill.water * settings.waterRate).toLocaleString()}</span>
+                                                <span>฿{( (payingBill?.water || 0) * (settings?.waterRate || 0) ).toLocaleString()}</span>
                                             </div>
                                             <div className="flex justify-between text-slate-600">
                                                 <span>ค่าไฟ ({payingBill.electric} หน่วย)</span>
-                                                <span>฿{(payingBill.electric * settings.electricRate).toLocaleString()}</span>
+                                                <span>฿{( (payingBill?.electric || 0) * (settings?.electricRate || 0) ).toLocaleString()}</span>
                                             </div>
                                             <div className="flex justify-between text-slate-600">
                                                 <span>ค่าส่วนกลาง</span>
-                                                <span>฿{(settings.serviceFee ?? 200).toLocaleString()}</span>
+                                                <span>฿{(settings?.serviceFee ?? 200).toLocaleString()}</span>
                                             </div>
                                             <div className="pt-2 border-t border-slate-200 flex justify-between font-bold text-slate-900 text-base">
                                                 <span>ยอดรวม</span>
-                                                <span className="text-indigo-600">฿{payingBill.total.toLocaleString()}</span>
+                                                <span className="text-indigo-600">฿{(payingBill?.total || 0).toLocaleString()}</span>
                                             </div>
                                         </div>
 

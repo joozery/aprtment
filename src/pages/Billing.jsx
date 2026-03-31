@@ -252,7 +252,7 @@ export default function Billing() {
                     <CardHeader className="pb-2">
                         <CardDescription className="font-semibold text-slate-500">ยอดค้างชำระทั้งหมด</CardDescription>
                         <CardTitle className="text-3xl font-bold text-slate-900 flex items-baseline gap-2">
-                            ฿{totalPending.toLocaleString()}
+                            ฿{(totalPending || 0).toLocaleString()}
                             <span className="text-sm font-medium text-rose-500 bg-rose-50 px-2 py-0.5 rounded-full">Pending</span>
                         </CardTitle>
                     </CardHeader>
@@ -271,7 +271,7 @@ export default function Billing() {
                     <CardHeader className="pb-2">
                         <CardDescription className="font-semibold text-slate-500">ยอดที่ชำระแล้ว</CardDescription>
                         <CardTitle className="text-3xl font-bold text-slate-900 flex items-baseline gap-2">
-                            ฿{totalPaid.toLocaleString()}
+                            ฿{(totalPaid || 0).toLocaleString()}
                             <span className="text-sm font-medium text-emerald-500 bg-emerald-50 px-2 py-0.5 rounded-full">Paid</span>
                         </CardTitle>
                     </CardHeader>
@@ -360,7 +360,7 @@ export default function Billing() {
                                                     <TableRow key={row.id || `invoice-${row.room}-${idx}`} className="group hover:bg-slate-50/50 transition-colors border-slate-50">
                                                         <TableCell className="pl-6 font-bold text-slate-700">{row.room}</TableCell>
                                                         <TableCell><div className="flex flex-col"><span className="font-medium text-slate-900">{row.name}</span><span className="text-xs text-slate-400">อัปเดต: {row.lastPay}</span></div></TableCell>
-                                                        <TableCell className="text-right"><span className="font-bold text-slate-900">฿{row.total.toLocaleString()}</span></TableCell>
+                                                        <TableCell className="text-right"><span className="font-bold text-slate-900">฿{(row.total || 0).toLocaleString()}</span></TableCell>
                                                         <TableCell className="text-center"><div className="flex items-center justify-center gap-2"><Badge variant="outline" className="bg-blue-50 text-blue-600 border-blue-100 font-medium"><Droplets size={10} className="mr-1" /> {row.water}</Badge><Badge variant="outline" className="bg-amber-50 text-amber-600 border-amber-100 font-medium"><Zap size={10} className="mr-1" /> {row.electric}</Badge></div></TableCell>
                                                         <TableCell className="text-center">
                                                             <Badge className={`font-semibold capitalize shadow-none border px-2.5 py-0.5 rounded-full ${row.status === 'ชำระแล้ว' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : row.status === 'ยังไม่ออกบิล' ? 'bg-slate-100 text-slate-500 border-slate-200' : 'bg-amber-50 text-amber-600 border-amber-100'}`}>{row.status}</Badge>
@@ -402,33 +402,134 @@ export default function Billing() {
                                         </div>
                                     </div>
 
-                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                                        {['electric', 'water'].map((type, tIdx) => (
-                                            <Card key={`${type}-card-${tIdx}`} className="border-none shadow-sm rounded-2xl bg-white overflow-hidden">
-                                                <CardHeader className={`px-6 py-4 border-b ${type === 'water' ? 'bg-blue-50/50 border-blue-100/50' : 'bg-amber-50/50 border-amber-100/50'}`}>
-                                                    <CardTitle className="text-lg font-bold flex items-center gap-2">{type === 'water' ? <Droplets size={20} className="text-blue-500" /> : <Zap size={20} className="text-amber-500" />} {type === 'water' ? 'มิเตอร์น้ำ' : 'มิเตอร์ไฟ'}</CardTitle>
-                                                </CardHeader>
-                                                <Table>
-                                                    <TableHeader className="bg-slate-50/30"><TableRow><TableHead className="w-24 pl-6">ห้อง</TableHead><TableHead>ครั้งก่อน</TableHead><TableHead>ครั้งนี้</TableHead><TableHead className="text-right pr-6">หน่วยใช้</TableHead></TableRow></TableHeader>
-                                                    <TableBody>
-                                                        {filteredTenants.map((item, idx) => {
-                                                            const prevVal = type === 'water' ? (item.lastWaterMeter || 0) : (item.lastElectricMeter || 0);
-                                                            const currVal = meters[type][item.room] || '';
-                                                            const usage = currVal ? Math.max(0, parseFloat(currVal) - parseFloat(prevVal || 0)) : '-';
-                                                            return (
-                                                                <TableRow key={`${type}-${item.room}-${idx}`} className="border-slate-50 hover:bg-slate-50/50">
-                                                                    <TableCell className="pl-6 font-bold text-slate-700"><div>{item.room}</div><div className="text-xs text-slate-400 font-medium whitespace-nowrap overflow-hidden text-ellipsis max-w-[100px]">{item.name}</div></TableCell>
-                                                                    <TableCell className="text-slate-400 text-sm font-medium">{prevVal}</TableCell>
-                                                                    <TableCell><Input type="number" value={currVal} onChange={(e) => handleMeterChange(type, item.room, e.target.value)} className="h-8 w-24 bg-white border-slate-200 rounded-lg text-sm font-bold" placeholder="0000" /></TableCell>
-                                                                    <TableCell className={`text-right pr-6 font-bold text-sm ${usage > 0 ? (type === 'water' ? 'text-blue-600' : 'text-amber-600') : 'text-slate-300'}`}>{usage}</TableCell>
-                                                                </TableRow>
-                                                            );
-                                                        })}
-                                                    </TableBody>
-                                                </Table>
-                                            </Card>
-                                        ))}
-                                    </div>
+                                     <Card className="border-none shadow-sm rounded-2xl bg-white overflow-hidden">
+                                        <CardHeader className="px-6 py-4 border-b bg-slate-50/50">
+                                            <CardTitle className="text-lg font-bold flex items-center gap-2">
+                                                <Zap size={20} className="text-amber-500" /> จดมิเตอร์น้ำ-ไฟ แยกตามห้อง
+                                            </CardTitle>
+                                        </CardHeader>
+                                        <div className="overflow-x-auto">
+                                            <Table>
+                                                <TableHeader className="bg-slate-50/30">
+                                                    <TableRow>
+                                                        <TableHead className="w-32 pl-6">ห้องพัก</TableHead>
+                                                        <TableHead className="text-center font-bold text-amber-600 bg-amber-50/20">ไฟ (ครั้งก่อน)</TableHead>
+                                                        <TableHead className="text-center font-bold text-amber-600 bg-amber-50/30">ไฟ (ครั้งนี้)</TableHead>
+                                                        <TableHead className="text-center font-bold text-blue-600 bg-blue-50/20">น้ำ (ครั้งก่อน)</TableHead>
+                                                        <TableHead className="text-center font-bold text-blue-600 bg-blue-50/30">น้ำ (ครั้งนี้)</TableHead>
+                                                        <TableHead className="text-right pr-6">หน่วยที่ใช้</TableHead>
+                                                    </TableRow>
+                                                </TableHeader>
+                                                <TableBody>
+                                                    {filteredTenants.map((item, idx) => {
+                                                        const prevElec = (item.lastElectricMeter || 0);
+                                                        const currElec = meters.electric[item.room] || '';
+                                                        const elecUsage = currElec ? Math.max(0, parseFloat(currElec) - parseFloat(prevElec)) : 0;
+
+                                                        const prevWater = (item.lastWaterMeter || 0);
+                                                        const currWater = meters.water[item.room] || '';
+                                                        const waterUsage = currWater ? Math.max(0, parseFloat(currWater) - parseFloat(prevWater)) : 0;
+
+                                                        const handleKeyDown = (e, type, room, index) => {
+                                                            if (e.key === 'Enter') {
+                                                                e.preventDefault();
+                                                                if (type === 'electric') {
+                                                                    // Move to water of same room
+                                                                    document.getElementById(`meter-water-${room}`)?.focus();
+                                                                } else {
+                                                                    // Move to next room's electric
+                                                                    const nextRoom = filteredTenants[index + 1];
+                                                                    if (nextRoom) {
+                                                                        document.getElementById(`meter-electric-${nextRoom.room}`)?.focus();
+                                                                    }
+                                                                }
+                                                            }
+                                                        };
+
+                                                        return (
+                                                            <TableRow key={`meter-row-${item.room}-${idx}`} className="border-slate-50 hover:bg-slate-50/50">
+                                                                <TableCell className="pl-6 py-4">
+                                                                    <div className="font-bold text-slate-800">{item.room}</div>
+                                                                    <div className="text-xs text-slate-400 font-medium truncate max-w-[120px]">{item.name}</div>
+                                                                </TableCell>
+                                                                
+                                                                {/* Electric */}
+                                                                <TableCell className="text-center bg-amber-50/5 text-slate-400">
+                                                                    <div className="flex flex-col items-center gap-1">
+                                                                        <span className="text-[10px] uppercase font-bold text-slate-300">ไฟเก่า</span>
+                                                                        <Input 
+                                                                            type="number"
+                                                                            className="h-7 w-16 bg-transparent border-slate-200 text-center text-xs font-medium focus:bg-white"
+                                                                            defaultValue={prevElec}
+                                                                            onBlur={(e) => {
+                                                                                const val = parseFloat(e.target.value);
+                                                                                if (!isNaN(val) && val !== prevElec) {
+                                                                                    updateTenant(item.id, { lastElectricMeter: val });
+                                                                                }
+                                                                            }}
+                                                                        />
+                                                                    </div>
+                                                                </TableCell>
+                                                                <TableCell className="bg-amber-50/20">
+                                                                    <div className="flex flex-col items-center gap-1">
+                                                                        <span className="text-[10px] uppercase font-bold text-amber-500">ไฟใหม่</span>
+                                                                        <Input 
+                                                                            id={`meter-electric-${item.room}`}
+                                                                            type="number" 
+                                                                            value={currElec} 
+                                                                            onChange={(e) => handleMeterChange('electric', item.room, e.target.value)} 
+                                                                            onKeyDown={(e) => handleKeyDown(e, 'electric', item.room, idx)}
+                                                                            className="h-9 w-24 bg-white border-amber-200 rounded-lg text-center font-bold text-amber-700 focus:border-amber-500 focus:ring-amber-500 shadow-sm" 
+                                                                            placeholder="0000" 
+                                                                        />
+                                                                    </div>
+                                                                </TableCell>
+
+                                                                {/* Water */}
+                                                                <TableCell className="text-center bg-blue-50/5 text-slate-400">
+                                                                    <div className="flex flex-col items-center gap-1">
+                                                                        <span className="text-[10px] uppercase font-bold text-slate-300">น้ำเก่า</span>
+                                                                        <Input 
+                                                                            type="number"
+                                                                            className="h-7 w-16 bg-transparent border-slate-200 text-center text-xs font-medium focus:bg-white"
+                                                                            defaultValue={prevWater}
+                                                                            onBlur={(e) => {
+                                                                                const val = parseFloat(e.target.value);
+                                                                                if (!isNaN(val) && val !== prevWater) {
+                                                                                    updateTenant(item.id, { lastWaterMeter: val });
+                                                                                }
+                                                                            }}
+                                                                        />
+                                                                    </div>
+                                                                </TableCell>
+                                                                <TableCell className="bg-blue-50/20">
+                                                                    <div className="flex flex-col items-center gap-1">
+                                                                        <span className="text-[10px] uppercase font-bold text-blue-500">น้ำใหม่</span>
+                                                                        <Input 
+                                                                            id={`meter-water-${item.room}`}
+                                                                            type="number" 
+                                                                            value={currWater} 
+                                                                            onChange={(e) => handleMeterChange('water', item.room, e.target.value)} 
+                                                                            onKeyDown={(e) => handleKeyDown(e, 'water', item.room, idx)}
+                                                                            className="h-9 w-24 bg-white border-blue-200 rounded-lg text-center font-bold text-blue-700 focus:border-blue-500 focus:ring-blue-500 shadow-sm" 
+                                                                            placeholder="0000" 
+                                                                        />
+                                                                    </div>
+                                                                </TableCell>
+
+                                                                <TableCell className="text-right pr-6">
+                                                                    <div className="flex flex-col items-end gap-1">
+                                                                        <span className={`text-xs font-bold ${elecUsage > 0 ? 'text-amber-600' : 'text-slate-300'}`}>ไฟ: {elecUsage}</span>
+                                                                        <span className={`text-xs font-bold ${waterUsage > 0 ? 'text-blue-600' : 'text-slate-300'}`}>น้ำ: {waterUsage}</span>
+                                                                    </div>
+                                                                </TableCell>
+                                                            </TableRow>
+                                                        );
+                                                    })}
+                                                </TableBody>
+                                            </Table>
+                                        </div>
+                                    </Card>
                                 </motion.div>
                             </TabsContent>
                         )}

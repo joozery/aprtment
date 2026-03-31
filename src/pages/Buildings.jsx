@@ -1,3 +1,4 @@
+// Force refresh: 2026-03-31T15:46:00Z
 import { useState } from 'react';
 import { useApp } from '@/context/AppContext';
 import { Button } from '@/components/ui/button';
@@ -5,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Building2, Plus, Pencil, Trash2, Home, FileUp, RotateCcw } from 'lucide-react';
+import { Building2, Plus, Pencil, Trash2, Home, FileUp, RotateCcw, Activity } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 export default function Buildings() {
@@ -23,7 +24,12 @@ export default function Buildings() {
         roomsPerFloor: 8,
         defaultRent: 4500,
         address: '',
-        taxId: ''
+        taxId: '',
+        waterRate: '',
+        electricRate: '',
+        waterMin: '',
+        electricMin: '',
+        serviceFee: ''
     });
 
     const handleImport = async () => {
@@ -112,7 +118,7 @@ export default function Buildings() {
     };
 
     const resetForm = () => {
-        setFormData({ name: '', prefix: '', floors: 4, roomsPerFloor: 8, defaultRent: 4500, address: '', taxId: '' });
+        setFormData({ name: '', prefix: '', floors: 4, roomsPerFloor: 8, defaultRent: 4500, address: '', taxId: '', waterRate: '', electricRate: '', waterMin: '', electricMin: '', serviceFee: '' });
         setEditingBuilding(null);
         setIsDialogOpen(false);
     };
@@ -126,7 +132,12 @@ export default function Buildings() {
             roomsPerFloor: building.roomsPerFloor,
             defaultRent: building.defaultRent,
             address: building.address || '',
-            taxId: building.taxId || ''
+            taxId: building.taxId || '',
+            waterRate: building.waterRate || '',
+            electricRate: building.electricRate || '',
+            waterMin: building.waterMin || '',
+            electricMin: building.electricMin || '',
+            serviceFee: building.serviceFee || ''
         });
         setIsDialogOpen(true);
     };
@@ -268,6 +279,34 @@ export default function Buildings() {
                                                 required
                                             />
                                         </div>
+                                        <div className="bg-slate-50 p-4 rounded-xl border border-dashed border-slate-200 mt-2">
+                                            <p className="text-xs font-bold text-slate-500 mb-4 flex items-center gap-2">
+                                                <Activity size={14} /> ตั้งค่าค่าน้ำ-ไฟ เฉพาะตึกนี้ (ถ้าไม่กรอกจะใช้ค่าส่วนกลาง)
+                                            </p>
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div className="space-y-2">
+                                                    <Label htmlFor="waterRate">ค่าน้ำ (บาท/ยูนิต)</Label>
+                                                    <Input id="waterRate" type="number" value={formData.waterRate} onChange={(e) => setFormData({ ...formData, waterRate: e.target.value })} placeholder="เช่น 35" />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <Label htmlFor="electricRate">ค่าไฟ (บาท/ยูนิต)</Label>
+                                                    <Input id="electricRate" type="number" value={formData.electricRate} onChange={(e) => setFormData({ ...formData, electricRate: e.target.value })} placeholder="เช่น 11" />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <Label htmlFor="waterMin">ค่าน้ำขั้นต่ำ</Label>
+                                                    <Input id="waterMin" type="number" value={formData.waterMin} onChange={(e) => setFormData({ ...formData, waterMin: e.target.value })} placeholder="เช่น 200" />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <Label htmlFor="electricMin">ค่าไฟขั้นต่ำ</Label>
+                                                    <Input id="electricMin" type="number" value={formData.electricMin} onChange={(e) => setFormData({ ...formData, electricMin: e.target.value })} placeholder="เช่น 200" />
+                                                </div>
+                                                <div className="space-y-2 col-span-2">
+                                                    <Label htmlFor="serviceFee">ค่าส่วนกลางตึกนี้</Label>
+                                                    <Input id="serviceFee" type="number" value={formData.serviceFee} onChange={(e) => setFormData({ ...formData, serviceFee: e.target.value })} placeholder="เช่น 200" />
+                                                </div>
+                                            </div>
+                                        </div>
+
                                         <div className="space-y-2">
                                             <Label htmlFor="address">ที่อยู่ตึก (ใช้พิมพ์ในบิล)</Label>
                                             <textarea
@@ -373,20 +412,27 @@ export default function Buildings() {
                                         <p className="font-bold text-slate-800">{building.roomsPerFloor} ห้อง</p>
                                     </div>
                                 </div>
-                                <div className="bg-indigo-50 p-3 rounded-lg border border-indigo-100">
-                                    <div className="flex items-center justify-between">
-                                        <span className="text-xs text-indigo-700 font-medium">ค่าเช่าเริ่มต้น</span>
-                                        <span className="font-bold text-indigo-900">
-                                            ฿{building.defaultRent.toLocaleString()}
-                                        </span>
-                                    </div>
-                                    {(building.address || building.taxId) && (
-                                        <div className="mt-3 pt-3 border-t border-indigo-100/50">
-                                            {building.taxId && <p className="text-[10px] text-indigo-600 mb-1"><span className="font-bold">TAX ID:</span> {building.taxId}</p>}
-                                            {building.address && <p className="text-[10px] text-indigo-700/70 truncate line-clamp-2 leading-tight" title={building.address}>{building.address}</p>}
+                                    <div className="bg-indigo-50 p-3 rounded-lg border border-indigo-100">
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-xs text-indigo-700 font-medium">ค่าเช่าเริ่มต้น</span>
+                                            <span className="font-bold text-indigo-900">
+                                                ฿{(building.defaultRent || 0).toLocaleString()}
+                                            </span>
                                         </div>
-                                    )}
-                                </div>
+                                        {(building.waterRate || building.electricRate) && (
+                                            <div className="mt-2 pt-2 border-t border-indigo-100/50 flex flex-wrap gap-2">
+                                                {building.waterRate && <Badge variant="outline" className="text-[10px] bg-white border-blue-100 text-blue-600">น้ำ: {building.waterRate}</Badge>}
+                                                {building.electricRate && <Badge variant="outline" className="text-[10px] bg-white border-amber-100 text-amber-600">ไฟ: {building.electricRate}</Badge>}
+                                                {building.serviceFee && <Badge variant="outline" className="text-[10px] bg-white border-slate-200 text-slate-500">ส่วนกลาง: {building.serviceFee}</Badge>}
+                                            </div>
+                                        )}
+                                        {(building.address || building.taxId) && (
+                                            <div className="mt-3 pt-3 border-t border-indigo-100/50 text-[10px] text-indigo-700/70">
+                                                {building.taxId && <p className="mb-0.5"><span className="font-bold">TAX ID:</span> {building.taxId}</p>}
+                                                {building.address && <p className="truncate line-clamp-1 leading-tight" title={building.address}>{building.address}</p>}
+                                            </div>
+                                        )}
+                                    </div>
                             </CardContent>
                         </Card>
                     </motion.div>

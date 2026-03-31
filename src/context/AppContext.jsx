@@ -225,12 +225,14 @@ export const AppProvider = ({ children }) => {
         const tenant = tenants.find(t => t.room === room);
         if (!tenant) return;
 
-        // Use rates from settings
-        const waterUnit = settings.waterRate || 35;
-        const electricUnit = settings.electricRate || 11;
-        const waterMin = settings.waterMin ?? 200;
-        const electricMin = settings.electricMin ?? 200;
-        const serviceFee = settings.serviceFee ?? 200;
+        const building = buildings.find(b => String(b.id) === String(tenant.buildingId));
+        
+        // Use rates from building (if set) or global settings
+        const waterUnit = (building?.waterRate !== null && building?.waterRate !== undefined) ? building.waterRate : (settings.waterRate || 35);
+        const electricUnit = (building?.electricRate !== null && building?.electricRate !== undefined) ? building.electricRate : (settings.electricRate || 11);
+        const waterMin = (building?.waterMin !== null && building?.waterMin !== undefined) ? building.waterMin : (settings.waterMin ?? 200);
+        const electricMin = (building?.electricMin !== null && building?.electricMin !== undefined) ? building.electricMin : (settings.electricMin ?? 200);
+        const serviceFee = (building?.serviceFee !== null && building?.serviceFee !== undefined) ? building.serviceFee : (settings.serviceFee ?? 200);
 
         const waterPriceRaw = waterMeter * waterUnit;
         const electricPriceRaw = electricMeter * electricUnit;

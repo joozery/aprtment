@@ -1,7 +1,9 @@
 {
   "name": "aprtmentv1",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.0.1",
+  "description": "Tenant Billing System for Apartment Management",
+  "author": "Antigravity",
   "type": "module",
   "main": "electron/main.cjs",
   "homepage": "./",

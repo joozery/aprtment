@@ -32,6 +32,27 @@ const buildingSchema = new mongoose.Schema({
     prefix: {
         type: String,
         default: '' // เลขนำหน้าห้อง (เช่น A, B หรือเลข 1, 2)
+    },
+    // อัตราค่าน้ำไฟประจำตึก (ถ้ามี จะใช้เป็นค่าเริ่มต้นเหนือ settings)
+    waterRate: {
+        type: Number,
+        default: null
+    },
+    electricRate: {
+        type: Number,
+        default: null
+    },
+    waterMin: {
+        type: Number,
+        default: null
+    },
+    electricMin: {
+        type: Number,
+        default: null
+    },
+    serviceFee: {
+        type: Number,
+        default: null
     }
 }, {
     timestamps: true

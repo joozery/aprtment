@@ -132,55 +132,57 @@ const SingleReceipt = ({ bill, tenant, settings, building, isLast }) => {
                 </thead>
                 <tbody>
                     {/* Room Rent */}
-                    <tr className="border-b border-black">
+                    <tr>
                         <td className="border-r border-black py-2 px-3 text-center align-top">1</td>
                         <td className="border-r border-black py-2 px-3 align-top">
-                            <div className="font-semibold">ค่าห้อง</div>
-                            <div className="text-xs text-gray-600 mt-0.5">{serviceStart} - {serviceEnd}</div>
+                            <div className="flex items-baseline gap-2">
+                                <span className="whitespace-nowrap">ค่าห้อง</span>
+                                <span className="text-[10px] text-gray-500 whitespace-nowrap">{serviceStart} - {serviceEnd}</span>
+                            </div>
                         </td>
                         <td className="border-r border-black py-2 px-3 text-right align-top">1</td>
-                        <td className="border-r border-black py-2 px-3 text-right align-top">{rent.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                        <td className="border-r border-black py-2 px-3 text-right align-top">{rent.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                        <td className="py-2 px-3 text-right align-top">{rent.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                        <td className="border-r border-black py-2 px-3 text-right align-top">{(rent || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                        <td className="border-r border-black py-2 px-3 text-right align-top">{(rent || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                        <td className="py-2 px-3 text-right align-top">{(rent || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                     </tr>
                     {/* Electric */}
-                    <tr className="border-b border-black">
+                    <tr>
                         <td className="border-r border-black py-2 px-3 text-center align-top">2</td>
                         <td className="border-r border-black py-2 px-3 align-top">
-                            <div className="font-semibold">ค่าไฟ</div>
-                            <div className="text-xs text-gray-600 mt-0.5">
-                                {(bill.currentElectric !== undefined && bill.electric) ? `${(parseFloat(bill.currentElectric) - bill.electric)} - ${bill.currentElectric}` : ''} &nbsp; {serviceStart} - {serviceEnd}
+                            <div className="flex items-baseline gap-2">
+                                <span className="whitespace-nowrap">ค่าไฟ</span>
+                                <span className="text-[10px] text-gray-500 whitespace-nowrap">{(bill.currentElectric !== undefined && bill.electric) ? `${(parseFloat(bill.currentElectric) - bill.electric)} - ${bill.currentElectric}` : ''} &nbsp; {serviceStart} - {serviceEnd}</span>
                             </div>
                         </td>
                         <td className="border-r border-black py-2 px-3 text-right align-top">{bill.electric}</td>
-                        <td className="border-r border-black py-2 px-3 text-right align-top">{settings.electricRate.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                        <td className="border-r border-black py-2 px-3 text-right align-top">{elecTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                        <td className="py-2 px-3 text-right align-top">{elecTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                        <td className="border-r border-black py-2 px-3 text-right align-top">{(settings?.electricRate || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                        <td className="border-r border-black py-2 px-3 text-right align-top">{(elecTotal || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                        <td className="py-2 px-3 text-right align-top">{(elecTotal || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                     </tr>
                     {/* Water */}
-                    <tr className="border-b border-black">
+                    <tr>
                         <td className="border-r border-black py-2 px-3 text-center align-top">3</td>
                         <td className="border-r border-black py-2 px-3 align-top">
-                            <div className="font-semibold">ค่าน้ำ</div>
-                            <div className="text-xs text-gray-600 mt-0.5">
-                                {(bill.currentWater !== undefined && bill.water) ? `${(parseFloat(bill.currentWater) - bill.water)} - ${bill.currentWater}` : ''} &nbsp; {serviceStart} - {serviceEnd}
+                            <div className="flex items-baseline gap-2">
+                                <span className="whitespace-nowrap">ค่าน้ำ</span>
+                                <span className="text-[10px] text-gray-500 whitespace-nowrap">{(bill.currentWater !== undefined && bill.water) ? `${(parseFloat(bill.currentWater) - bill.water)} - ${bill.currentWater}` : ''} &nbsp; {serviceStart} - {serviceEnd}</span>
                             </div>
                         </td>
                         <td className="border-r border-black py-2 px-3 text-right align-top">{bill.water}</td>
-                        <td className="border-r border-black py-2 px-3 text-right align-top">{settings.waterRate.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                        <td className="border-r border-black py-2 px-3 text-right align-top">{waterTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                        <td className="py-2 px-3 text-right align-top">{waterTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                        <td className="border-r border-black py-2 px-3 text-right align-top">{(settings?.waterRate || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                        <td className="border-r border-black py-2 px-3 text-right align-top">{(waterTotal || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                        <td className="py-2 px-3 text-right align-top">{(waterTotal || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                     </tr>
                     {/* Common Fee */}
                     <tr className="border-b border-black">
                         <td className="border-r border-black py-2 px-3 text-center align-top">4</td>
                         <td className="border-r border-black py-2 px-3 align-top">
-                            <div className="font-semibold">ค่าส่วนกลาง</div>
+                            <div className="font-normal">ค่าส่วนกลาง</div>
                         </td>
                         <td className="border-r border-black py-2 px-3 text-right align-top">1</td>
-                        <td className="border-r border-black py-2 px-3 text-right align-top">{commonFee.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                        <td className="border-r border-black py-2 px-3 text-right align-top">{commonFee.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                        <td className="py-2 px-3 text-right align-top">{commonFee.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                        <td className="border-r border-black py-2 px-3 text-right align-top">{(commonFee || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                        <td className="border-r border-black py-2 px-3 text-right align-top">{(commonFee || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                        <td className="py-2 px-3 text-right align-top">{(commonFee || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                     </tr>
                     {/* Total */}
                     <tr>
@@ -190,8 +192,8 @@ const SingleReceipt = ({ bill, tenant, settings, building, isLast }) => {
                                 <span className="text-xs italic text-gray-600 mx-4">* {thaiBahtText(netTotal)} *</span>
                             </div>
                         </td>
-                        <td className="border-r border-black py-2 px-3 text-right font-semibold">{netTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                        <td className="py-2 px-3 text-right font-semibold">{netTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                        <td className="border-r border-black py-2 px-3 text-right font-semibold">{(netTotal || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                        <td className="py-2 px-3 text-right font-semibold">{(netTotal || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                     </tr>
                 </tbody>
             </table>
