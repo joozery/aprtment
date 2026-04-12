@@ -9,6 +9,11 @@ const settingsSchema = new mongoose.Schema({
     serviceFee: { type: Number, default: 200 },
     defaultRent: { type: Number, default: 4500 },
     promptpayPhone: { type: String, default: '' },
+    contractConfig: {
+        title: { type: String, default: 'สัญญาเช่าห้องพักอาศัย' },
+        lessorName: { type: String, default: 'หอพักตวงเงินแมนชั่น' },
+        terms: [{ type: String }]
+    }
 }, { timestamps: true });
 
 module.exports = mongoose.model('Settings', settingsSchema);

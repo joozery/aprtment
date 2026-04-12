@@ -49,10 +49,7 @@ export const AppProvider = ({ children }) => {
         return saved ? JSON.parse(saved) : initialSettings;
     });
     const [tenants, setTenants] = useState([]);
-    const [maintenance, setMaintenance] = useState(() => {
-        const saved = localStorage.getItem('smart_maintenance');
-        return saved ? JSON.parse(saved) : initialMaintenance;
-    });
+    const [maintenance, setMaintenance] = useState([]);
 
     const [billing, setBilling] = useState([]);
     const [rooms, setRooms] = useState([]);
@@ -84,6 +81,7 @@ export const AppProvider = ({ children }) => {
                     axios.get(`${API_URL}/billing`),
                     axios.get(`${API_URL}/settings`),
                     axios.get(`${API_URL}/rooms`),
+                    axios.get(`${API_URL}/maintenance`),
                 ]);
 
                 const uniqueItems = (data) => {
@@ -102,10 +100,14 @@ export const AppProvider = ({ children }) => {
                 setTenants(uniqueItems(tenantsRes.data.data));
                 setBilling(uniqueItems(billingRes.data.data));
                 setRooms(uniqueItems(roomsRes.data.data));
+                setMaintenance(uniqueItems(maintenanceRes.data.data));
 
                 if (settingsRes.data.success) {
                     const s = settingsRes.data.data;
                     setSettings(prev => ({ ...prev, ...(s || {}) }));
+                    if (s?.contractConfig) {
+                        setContractConfigState(s.contractConfig);
+                    }
                 }
             } catch (err) {
                 console.error('Error fetching data:', err);
@@ -118,9 +120,7 @@ export const AppProvider = ({ children }) => {
         localStorage.setItem('smart_settings', JSON.stringify(settings));
     }, [settings]);
 
-    useEffect(() => {
-        localStorage.setItem('smart_maintenance', JSON.stringify(maintenance));
-    }, [maintenance]);
+
 
     useEffect(() => {
         localStorage.setItem('smart_billing', JSON.stringify(billing));
@@ -209,16 +209,41 @@ export const AppProvider = ({ children }) => {
         }
     };
 
-    const updateMaintenanceStatus = (id, status) => {
-        setMaintenance(prev => prev.map(item => item.id === id ? { ...item, status } : item));
+    const updateMaintenanceStatus = async (id, status) => {
+        try {
+            const res = await axios.put(`${API_URL}/maintenance/${id}`, { status });
+            if (res.data.success) {
+                setMaintenance(prev => prev.map(item => (item.id === id || item._id === id) ? { ...item, status } : item));
+            }
+        } catch (err) {
+            console.error(err);
+        }
     };
 
-    const addMaintenance = (req) => {
-        setMaintenance(prev => [{ ...req, id: Date.now(), date: new Date().toLocaleDateString('th-TH') }, ...prev]);
+    const addMaintenance = async (req) => {
+        try {
+            const res = await axios.post(`${API_URL}/maintenance`, {
+                ...req,
+                date: new Date().toLocaleDateString('th-TH')
+            });
+            if (res.data.success) {
+                const newEntry = { ...res.data.data, id: res.data.data._id };
+                setMaintenance(prev => [newEntry, ...prev]);
+            }
+        } catch (err) {
+            console.error(err);
+        }
     };
 
-    const deleteMaintenance = (id) => {
-        setMaintenance(prev => prev.filter(m => m.id !== id));
+    const deleteMaintenance = async (id) => {
+        try {
+            const res = await axios.delete(`${API_URL}/maintenance/${id}`);
+            if (res.data.success) {
+                setMaintenance(prev => prev.filter(m => m.id !== id && m._id !== id));
+            }
+        } catch (err) {
+            console.error(err);
+        }
     };
 
     const calculateBill = async (room, waterMeter, electricMeter, currentWater, currentElectric) => {
@@ -317,7 +342,7 @@ export const AppProvider = ({ children }) => {
     };
 
     // Helper Functions
-    const [contractConfig, setContractConfig] = useState({
+    const [contractConfig, setContractConfigState] = useState({
         title: 'สัญญาเช่าห้องพักอาศัย',
         lessorName: 'หอพักตวงเงินแมนชั่น',
         terms: [
@@ -327,6 +352,12 @@ export const AppProvider = ({ children }) => {
             'หากผิดสัญญา ผู้ให้เช่ามีสิทธิ์บอกเลิกสัญญาได้ทันที'
         ]
     });
+
+    const setContractConfig = (newConfig) => {
+        const updatedConfig = typeof newConfig === 'function' ? newConfig(contractConfig) : newConfig;
+        setContractConfigState(updatedConfig);
+        updateSettings({ contractConfig: updatedConfig });
+    };
 
     const getRoomInfo = (roomNum, buildingContext = null) => {
         // Find building context if not provided

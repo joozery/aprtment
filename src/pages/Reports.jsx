@@ -181,8 +181,8 @@ export default function Reports() {
                         </div>
                     </CardHeader>
                     <CardContent className="px-2 pb-6">
-                        <div className="h-[350px] w-full mt-4">
-                            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+                        <div className="h-[350px] w-full mt-4 relative overflow-hidden">
+                            <ResponsiveContainer width="100%" height="100%">
                                 <AreaChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                                     <defs>
                                         <linearGradient id="colorIncome" x1="0" y1="0" x2="0" y2="1">
@@ -227,8 +227,8 @@ export default function Reports() {
                         <CardDescription className="text-xs">วิเคราะห์โครงสร้างต้นทุนเดือนล่าสุด</CardDescription>
                     </CardHeader>
                     <CardContent className="p-4">
-                        <div className="h-[200px] w-full">
-                            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+                        <div className="h-[200px] w-full relative overflow-hidden">
+                            <ResponsiveContainer width="100%" height="100%">
                                 <PieChart>
                                     <Pie
                                         data={expenseBreakdown}

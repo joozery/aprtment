@@ -16,7 +16,7 @@ app.use('/api/tenants', require('./routes/tenants'));
 app.use('/api/billing', require('./routes/billing'));
 app.use('/api/rooms', require('./routes/rooms'));
 app.use('/api/settings', require('./routes/settings'));
-// app.use('/api/maintenance', require('./routes/maintenance'));
+app.use('/api/maintenance', require('./routes/maintenance'));
 
 // Basic Route for Testing
 app.get('/', (req, res) => {

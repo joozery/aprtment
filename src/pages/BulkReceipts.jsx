@@ -94,19 +94,19 @@ const SingleReceipt = ({ bill, tenant, settings, building, isLast }) => {
                         </div>
                     </div>
                 </div>
-                <div className="w-1/2">
-                    <div className="text-sm space-y-1 text-right">
-                        <div className="flex justify-end gap-8">
-                            <span className="font-semibold">เลขที่</span>
-                            <span>0000{bill.room}10</span>
+                <div className="w-1/2 flex justify-end">
+                    <div className="text-sm space-y-1 w-fit">
+                        <div className="grid grid-cols-[60px_120px] items-center">
+                            <span className="font-semibold text-left">เลขที่</span>
+                            <span className="text-right font-medium">0000{bill.room}10</span>
                         </div>
-                        <div className="flex justify-end gap-8">
-                            <span className="font-semibold">วันที่</span>
-                            <span>{printDate}</span>
+                        <div className="grid grid-cols-[60px_120px] items-center">
+                            <span className="font-semibold text-left">วันที่</span>
+                            <span className="text-right font-medium">{printDate}</span>
                         </div>
-                        <div className="flex justify-end gap-8">
-                            <span className="font-semibold">ห้อง</span>
-                            <span>{bill.room}</span>
+                        <div className="grid grid-cols-[60px_120px] items-center">
+                            <span className="font-semibold text-left">ห้อง</span>
+                            <span className="text-right font-medium">{bill.room}</span>
                         </div>
                     </div>
                 </div>
@@ -119,7 +119,7 @@ const SingleReceipt = ({ bill, tenant, settings, building, isLast }) => {
             </div>
 
             {/* Table - no tax column */}
-            <table className="w-full border-collapse border border-black text-sm mb-0">
+            <table className="w-full border-collapse text-sm mb-0 shadow-none border-none" style={{ border: '1px solid black' }}>
                 <thead>
                     <tr className="border-b border-black">
                         <th className="border-r border-black py-2 px-3 text-center font-semibold">ลำดับ</th>
@@ -132,12 +132,12 @@ const SingleReceipt = ({ bill, tenant, settings, building, isLast }) => {
                 </thead>
                 <tbody>
                     {/* Room Rent */}
-                    <tr>
+                    <tr className="border-b-0">
                         <td className="border-r border-black py-2 px-3 text-center align-top">1</td>
                         <td className="border-r border-black py-2 px-3 align-top">
                             <div className="flex items-baseline gap-2">
                                 <span className="whitespace-nowrap">ค่าห้อง</span>
-                                <span className="text-[10px] text-gray-500 whitespace-nowrap">{serviceStart} - {serviceEnd}</span>
+                                <span className="text-sm text-black whitespace-nowrap">{serviceStart} - {serviceEnd}</span>
                             </div>
                         </td>
                         <td className="border-r border-black py-2 px-3 text-right align-top">1</td>
@@ -146,12 +146,12 @@ const SingleReceipt = ({ bill, tenant, settings, building, isLast }) => {
                         <td className="py-2 px-3 text-right align-top">{(rent || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                     </tr>
                     {/* Electric */}
-                    <tr>
+                    <tr className="border-b-0">
                         <td className="border-r border-black py-2 px-3 text-center align-top">2</td>
                         <td className="border-r border-black py-2 px-3 align-top">
                             <div className="flex items-baseline gap-2">
                                 <span className="whitespace-nowrap">ค่าไฟ</span>
-                                <span className="text-[10px] text-gray-500 whitespace-nowrap">{(bill.currentElectric !== undefined && bill.electric) ? `${(parseFloat(bill.currentElectric) - bill.electric)} - ${bill.currentElectric}` : ''} &nbsp; {serviceStart} - {serviceEnd}</span>
+                                <span className="text-sm text-black whitespace-nowrap">{(bill.currentElectric !== undefined && bill.electric) ? `${(parseFloat(bill.currentElectric) - bill.electric)} - ${bill.currentElectric}` : ''} &nbsp; {serviceStart} - {serviceEnd}</span>
                             </div>
                         </td>
                         <td className="border-r border-black py-2 px-3 text-right align-top">{bill.electric}</td>
@@ -160,12 +160,12 @@ const SingleReceipt = ({ bill, tenant, settings, building, isLast }) => {
                         <td className="py-2 px-3 text-right align-top">{(elecTotal || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                     </tr>
                     {/* Water */}
-                    <tr>
+                    <tr className="border-b-0">
                         <td className="border-r border-black py-2 px-3 text-center align-top">3</td>
                         <td className="border-r border-black py-2 px-3 align-top">
                             <div className="flex items-baseline gap-2">
                                 <span className="whitespace-nowrap">ค่าน้ำ</span>
-                                <span className="text-[10px] text-gray-500 whitespace-nowrap">{(bill.currentWater !== undefined && bill.water) ? `${(parseFloat(bill.currentWater) - bill.water)} - ${bill.currentWater}` : ''} &nbsp; {serviceStart} - {serviceEnd}</span>
+                                <span className="text-sm text-black whitespace-nowrap">{(bill.currentWater !== undefined && bill.water) ? `${(parseFloat(bill.currentWater) - bill.water)} - ${bill.currentWater}` : ''} &nbsp; {serviceStart} - {serviceEnd}</span>
                             </div>
                         </td>
                         <td className="border-r border-black py-2 px-3 text-right align-top">{bill.water}</td>
@@ -174,7 +174,7 @@ const SingleReceipt = ({ bill, tenant, settings, building, isLast }) => {
                         <td className="py-2 px-3 text-right align-top">{(waterTotal || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                     </tr>
                     {/* Common Fee */}
-                    <tr className="border-b border-black">
+                    <tr className="border-b-0 h-[100px]">
                         <td className="border-r border-black py-2 px-3 text-center align-top">4</td>
                         <td className="border-r border-black py-2 px-3 align-top">
                             <div className="font-normal">ค่าส่วนกลาง</div>
@@ -185,11 +185,11 @@ const SingleReceipt = ({ bill, tenant, settings, building, isLast }) => {
                         <td className="py-2 px-3 text-right align-top">{(commonFee || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                     </tr>
                     {/* Total */}
-                    <tr>
+                    <tr className="total-row border-t border-black">
                         <td colSpan="4" className="border-r border-black py-2 px-3 font-semibold">
-                            <div className="flex items-center justify-between">
-                                <span>ยอดเงินสุทธิ</span>
-                                <span className="text-xs italic text-gray-600 mx-4">* {thaiBahtText(netTotal)} *</span>
+                            <div className="flex items-center">
+                                <span className="whitespace-nowrap">ยอดเงินสุทธิ</span>
+                                <span className="flex-1 text-center text-sm text-black">( * {thaiBahtText(netTotal)} * )</span>
                             </div>
                         </td>
                         <td className="border-r border-black py-2 px-3 text-right font-semibold">{(netTotal || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
@@ -309,29 +309,49 @@ export default function BulkReceipts() {
                     @import url('https://fonts.googleapis.com/css2?family=Sarabun:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap');
                     @media print {
                         @page { 
-                            size: A4 landscape; 
-                            margin: 15mm; 
+                            size: auto !important; 
+                            margin: 10mm !important; 
+                        }
+                        table, th, td, tr {
+                            color: black !important;
+                        }
+                        table {
+                            border: 1px solid black !important;
+                            border-collapse: collapse !important;
+                        }
+                        thead tr, thead th {
+                            border-bottom: 1px solid black !important;
+                        }
+                        th, td {
+                            border-right: 1px solid black !important;
+                        }
+                        tbody tr, tbody td {
+                            border-bottom: none !important;
+                        }
+                        .total-row, .total-row td {
+                            border-top: 1px solid black !important;
+                        }
+                        th:last-child, td:last-child {
+                            border-right: none !important;
                         }
                         * {
-                            background: white !important;
                             -webkit-print-color-adjust: exact !important;
                             print-color-adjust: exact !important;
+                            font-family: 'Sarabun', sans-serif !important;
                         }
                         body { 
                             background: white !important; 
-                            margin: 0; 
-                            padding: 0; 
+                            margin: 0 !important; 
+                            padding: 0 !important; 
                         }
                         .receipt-page {
                             background: white !important;
-                            padding: 10mm 15mm !important;
+                            padding: 10mm !important;
                         }
                         .page-break { 
                             page-break-after: always; 
                         }
-                        .no-print { 
-                            display: none; 
-                        }
+                        .no-print, button, nav, aside { display: none !important; }
                     }
                     @media screen {
                         .receipt-page {

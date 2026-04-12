@@ -154,16 +154,13 @@
     border: none !important;
   }
 
-  /* Ensure table borders show in print */
+  /* Table layout in print - let each page handle its own borders */
   .printable-area table {
-    border-collapse: collapse !important;
     width: 100% !important;
   }
-  
-  .printable-area th, 
+
+  .printable-area th,
   .printable-area td {
-    border: 1px solid #000 !important; /* Force black border for print clarity */
-    padding: 8px !important;
     visibility: visible !important;
   }
 
