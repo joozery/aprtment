@@ -15,17 +15,40 @@ exports.getTenants = async (req, res) => {
 // Create a new tenant check room first
 exports.createTenant = async (req, res) => {
     try {
-        const { room, name, rent, status, date, expiry, phone } = req.body;
+        const { room, name, rent, status, date, expiry, phone, buildingId } = req.body;
 
-        // Verify if room exists and get building id
-        const roomData = await Room.findOne({ number: room });
+        // 1. Verify if room exists
+        let roomData = await Room.findOne({ number: room });
 
         if (!roomData) {
-            return res.status(404).json({ success: false, error: 'Room does not exist' });
+            // If room doesn't exist, create it automatically (supports Manual Room Entry)
+            // Use the provided buildingId or default to the first building
+            let targetBuildingId = buildingId;
+            if (!targetBuildingId) {
+                const firstBuilding = await Building.findOne();
+                targetBuildingId = firstBuilding ? firstBuilding.id : null;
+            }
+
+            if (!targetBuildingId) {
+                return res.status(400).json({ success: false, error: 'No building found to associate with this room' });
+            }
+
+            roomData = new Room({
+                number: room,
+                buildingId: targetBuildingId,
+                floor: parseInt(room.substring(0, 1)) || 1, // Estimate floor
+                rent: rent || 4500,
+                status: 'vacant'
+            });
+            await roomData.save();
         }
 
+        // 2. Double check if occupied (just in case)
         if (roomData.status !== 'vacant') {
-            return res.status(400).json({ success: false, error: 'Room is already occupied or under maintenance' });
+            const existingTenant = await Tenant.findOne({ room, buildingId: roomData.buildingId });
+            if (existingTenant) {
+                return res.status(400).json({ success: false, error: 'Room is already occupied' });
+            }
         }
 
         const avatar = name.substring(0, 2).toUpperCase();
@@ -44,7 +67,7 @@ exports.createTenant = async (req, res) => {
 
         await tenant.save();
 
-        // Update room status
+        // 3. Update room status
         roomData.status = 'occupied';
         await roomData.save();
 

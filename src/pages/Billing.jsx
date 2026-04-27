@@ -17,7 +17,8 @@ import {
     Filter,
     Calendar,
     Wallet,
-    Save
+    Save,
+    Trash2
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -68,6 +69,11 @@ export default function Billing() {
     const [statusFilter, setStatusFilter] = useState('all');
     const [isImportOpen, setIsImportOpen] = useState(false);
     const [importData, setImportData] = useState('');
+    const [isBulkDialogOpen, setIsBulkDialogOpen] = useState(false);
+    const [bulkStep, setBulkStep] = useState('confirm');
+    const [isBulkSaving, setIsBulkSaving] = useState(false);
+    const [isDeleteAllDialogOpen, setIsDeleteAllDialogOpen] = useState(false);
+    const [selectedBills, setSelectedBills] = useState(new Set());
 
     // Dynamic Billing Logic
     const waterRate = settings?.waterRate || 35;
@@ -166,26 +172,38 @@ export default function Billing() {
     const paidCount = baseBilling.filter(b => b.status === 'ชำระแล้ว').length;
     const totalCount = baseBilling.filter(b => b.status !== 'ยังไม่ออกบิล').length || 1;
 
+    const [bulkProgress, setBulkProgress] = useState({ done: 0, total: 0 });
+
     const handleCalculateAll = async () => {
-        const drafts = filteredBilling.filter(b => b.isDraft);
-        if (drafts.length === 0) {
-            alert('ไม่มีบิลค้างให้ออก หรือระบุเลขมิเตอร์ก่อน');
-            return;
+        // Process ALL non-paid bills: drafts (new) + pending (already issued but need date update)
+        const allPending = filteredBilling.filter(b => b.status !== 'ชำระแล้ว');
+        if (allPending.length === 0) return;
+
+        setBulkStep('saving');
+        setIsBulkSaving(true);
+        setBulkProgress({ done: 0, total: allPending.length });
+
+        let successCount = 0;
+        for (const item of allPending) {
+            try {
+                await calculateBill(item.room, undefined, undefined, item.currentWater, item.currentElectric);
+                successCount++;
+                setBulkProgress(p => ({ ...p, done: successCount }));
+            } catch (err) {
+                console.error(`Error billing room ${item.room}:`, err);
+            }
         }
 
-        try {
-            for (const item of drafts) {
-                if (item.currentWater > 0 || item.currentElectric > 0) {
-                    await calculateBill(item.room, undefined, undefined, item.currentWater, item.currentElectric);
-                }
-            }
-            alert(`ออกบิลเรียบร้อย ${drafts.length} รายการ`);
-            await fetchData();
-            setActiveTab('invoice');
-        } catch (error) {
-            console.error(error);
-            alert('เกิดข้อผิดพลาดในการออกบิลหมู่');
-        }
+        // Force full data refresh from server
+        if (fetchData) await fetchData();
+        setBulkStep('success');
+        setBulkProgress({ done: successCount, total: allPending.length });
+        setIsBulkSaving(false);
+    };
+
+    const openBulkConfirm = () => {
+        setBulkStep('confirm');
+        setIsBulkDialogOpen(true);
     };
 
     const handleImportMeters = () => {
@@ -212,6 +230,31 @@ export default function Billing() {
         alert(`นำเข้าข้อมูลมิเตอร์เรียบร้อย ${count} ห้อง`);
     };
 
+    const handleDeleteAll = async () => {
+        const issuedBills = filteredBilling.filter(b => b.status !== 'ยังไม่ออกบิล' && b.status !== 'ชำระแล้ว' && !b.isDraft);
+        if (issuedBills.length === 0) return;
+
+        setBulkStep('saving');
+        setIsBulkSaving(true);
+        setIsDeleteAllDialogOpen(false);
+        setBulkProgress({ done: 0, total: issuedBills.length });
+
+        let count = 0;
+        for (const bill of issuedBills) {
+            try {
+                await deleteBill(bill._id || bill.id);
+                count++;
+                setBulkProgress(p => ({ ...p, done: count }));
+            } catch (err) {
+                console.error(`Error deleting bill ${bill.room}:`, err);
+            }
+        }
+        
+        if (fetchData) await fetchData();
+        setBulkStep('success');
+        setIsBulkSaving(false);
+    };
+
     const handleMeterChange = (type, room, value) => {
         setMeters(prev => ({
             ...prev,
@@ -220,6 +263,31 @@ export default function Billing() {
                 [room]: value
             }
         }));
+    };
+
+    const toggleSelectAll = () => {
+        if (selectedBills.size === filteredBilling.length) {
+            setSelectedBills(new Set());
+        } else {
+            const printable = filteredBilling.filter(b => b.status !== 'ยังไม่ออกบิล' && !b.isDraft);
+            setSelectedBills(new Set(printable.map(b => b._id || b.id)));
+        }
+    };
+
+    const toggleSelectBill = (id) => {
+        const next = new Set(selectedBills);
+        if (next.has(id)) {
+            next.delete(id);
+        } else {
+            next.add(id);
+        }
+        setSelectedBills(next);
+    };
+
+    const handlePrintSelected = () => {
+        if (selectedBills.size === 0) return;
+        const ids = Array.from(selectedBills).join(',');
+        navigate(`/receipts/all?ids=${ids}`);
     };
 
     return (
@@ -331,21 +399,65 @@ export default function Billing() {
                         {activeTab === 'invoice' && (
                             <TabsContent key="invoice-tab" value="invoice" forceMount>
                                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-6">
-                                    {selectedBuilding !== 'all' && (
-                                        <div className="flex items-center justify-between p-4 bg-indigo-50 rounded-xl border border-indigo-100 mb-6">
-                                            <div className="flex items-center gap-3 text-indigo-900 font-medium">
-                                                <Building2 size={20} className="text-indigo-600" />
-                                                <span>กำลังจัดการ: <span className="font-bold">{buildings.find(b => b.id.toString() === selectedBuilding)?.name}</span> ({filteredBilling.length} รายการ)</span>
-                                            </div>
-                                            <Button onClick={() => navigate(`/receipts/building/${selectedBuilding}`)} className="bg-white text-indigo-600 hover:bg-indigo-100 border border-indigo-200 shadow-sm font-semibold h-9"><Printer size={16} className="mr-2" /> พิมพ์บิลทั้งตึก</Button>
+                                    <div className="flex flex-col md:flex-row justify-between items-center gap-4 no-print">
+                                        <div className="flex items-center gap-2">
+                                            {filteredBilling.some(b => b.status !== 'ยังไม่ออกบิล' && b.status !== 'ชำระแล้ว' && !b.isDraft) && (
+                                                <Button 
+                                                    onClick={() => setIsDeleteAllDialogOpen(true)}
+                                                    variant="outline"
+                                                    className="border-rose-200 text-rose-600 hover:bg-rose-50 font-bold h-10 px-6 rounded-xl shadow-sm transition-all"
+                                                >
+                                                    <Trash2 size={18} className="mr-2" />
+                                                    ยกเลิกบิลทั้งหมด ({filteredBilling.filter(b => b.status !== 'ยังไม่ออกบิล' && b.status !== 'ชำระแล้ว' && !b.isDraft).length})
+                                                </Button>
+                                            )}
+
+                                            {filteredBilling.some(b => b.status !== 'ชำระแล้ว') && (
+                                                <Button 
+                                                    onClick={openBulkConfirm} 
+                                                    className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold h-10 px-6 rounded-xl shadow-md transition-all hover:scale-[1.02] active:scale-95"
+                                                >
+                                                    <Save size={18} className="mr-2" />
+                                                    บันทึกและออกบิลทั้งหมด ({filteredBilling.filter(b => b.status !== 'ชำระแล้ว').length} รายการ)
+                                                </Button>
+                                            )}
                                         </div>
-                                    )}
+                                        <div className="flex gap-2">
+                                            {selectedBills.size > 0 && (
+                                                <Button 
+                                                    onClick={handlePrintSelected}
+                                                    className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold h-10 px-6 rounded-xl shadow-md transition-all animate-in fade-in slide-in-from-right-2"
+                                                >
+                                                    <Printer size={18} className="mr-2" />
+                                                    พิมพ์ที่เลือก ({selectedBills.size})
+                                                </Button>
+                                            )}
+                                            {selectedBuilding !== 'all' && (
+                                                <Button 
+                                                    onClick={() => navigate(`/receipts/building/${selectedBuilding}`)} 
+                                                    variant="outline"
+                                                    className="h-10 px-4 rounded-xl border-slate-200 bg-white font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+                                                >
+                                                    <Printer size={16} className="mr-2 text-slate-400" /> 
+                                                    พิมพ์บิลทั้งตึก ({buildings.find(b => b.id.toString() === selectedBuilding)?.name})
+                                                </Button>
+                                            )}
+                                        </div>
+                                    </div>
 
                                     <Card className="border-none shadow-sm rounded-2xl bg-white overflow-hidden">
                                         <Table>
                                             <TableHeader className="bg-slate-50/50">
                                                 <TableRow className="border-slate-100">
-                                                    <TableHead className="font-semibold text-slate-500 pl-6 h-12">ห้องพัก</TableHead>
+                                                    <TableHead className="w-12 pl-6 h-12">
+                                                        <input 
+                                                            type="checkbox" 
+                                                            className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                                                            checked={selectedBills.size > 0 && selectedBills.size === filteredBilling.filter(b => b.status !== 'ยังไม่ออกบิล' && !b.isDraft).length}
+                                                            onChange={toggleSelectAll}
+                                                        />
+                                                    </TableHead>
+                                                    <TableHead className="font-semibold text-slate-500 h-12">ห้องพัก</TableHead>
                                                     <TableHead className="font-semibold text-slate-500 h-12">ผู้เช่า</TableHead>
                                                     <TableHead className="text-right font-semibold text-slate-500 h-12">ยอดรวม</TableHead>
                                                     <TableHead className="text-center font-semibold text-slate-500 h-12">มิเตอร์น้ำ/ไฟ</TableHead>
@@ -357,8 +469,18 @@ export default function Billing() {
                                                 {filteredBilling.length === 0 ? (
                                                     <TableRow><TableCell colSpan={6} className="h-40 text-center text-slate-400">ไม่พบรายการบิลในรอบนี้</TableCell></TableRow>
                                                 ) : filteredBilling.map((row, idx) => (
-                                                    <TableRow key={row.id || `invoice-${row.room}-${idx}`} className="group hover:bg-slate-50/50 transition-colors border-slate-50">
-                                                        <TableCell className="pl-6 font-bold text-slate-700">{row.room}</TableCell>
+                                                    <TableRow key={row.id || `invoice-${row.room}-${idx}`} className={`group hover:bg-slate-50/50 transition-colors border-slate-50 ${selectedBills.has(row._id || row.id) ? 'bg-indigo-50/30' : ''}`}>
+                                                        <TableCell className="pl-6">
+                                                            {(row.status !== 'ยังไม่ออกบิล' && !row.isDraft) && (
+                                                                <input 
+                                                                    type="checkbox" 
+                                                                    className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                                                                    checked={selectedBills.has(row._id || row.id)}
+                                                                    onChange={() => toggleSelectBill(row._id || row.id)}
+                                                                />
+                                                            )}
+                                                        </TableCell>
+                                                        <TableCell className="font-bold text-slate-700">{row.room}</TableCell>
                                                         <TableCell><div className="flex flex-col"><span className="font-medium text-slate-900">{row.name}</span><span className="text-xs text-slate-400">อัปเดต: {row.lastPay}</span></div></TableCell>
                                                         <TableCell className="text-right"><span className="font-bold text-slate-900">฿{(row.total || 0).toLocaleString()}</span></TableCell>
                                                         <TableCell className="text-center"><div className="flex items-center justify-center gap-2"><Badge variant="outline" className="bg-blue-50 text-blue-600 border-blue-100 font-medium"><Droplets size={10} className="mr-1" /> {row.water}</Badge><Badge variant="outline" className="bg-amber-50 text-amber-600 border-amber-100 font-medium"><Zap size={10} className="mr-1" /> {row.electric}</Badge></div></TableCell>
@@ -372,7 +494,16 @@ export default function Billing() {
                                                                     {row.status === 'ยังไม่ออกบิล' && (<DropdownMenuItem onClick={() => calculateBill(row.room, row.water, row.electric, row.currentWater, row.currentElectric)} className="rounded-lg text-indigo-600"><Plus size={14} className="mr-2" /> บันทึกออกบิล</DropdownMenuItem>)}
                                                                     {row.status !== 'ยังไม่ออกบิล' && row.status !== 'ชำระแล้ว' && (<DropdownMenuItem onClick={() => payBill(row.room)} className="rounded-lg text-emerald-600"><CheckCircle2 size={14} className="mr-2" /> ยืนยันการชำระเงิน</DropdownMenuItem>)}
                                                                     <DropdownMenuItem onClick={() => navigate(`/receipt/${row.room}`)} className="rounded-lg text-slate-700"><Printer size={14} className="mr-2 text-slate-400" /> พิมพ์ใบเสร็จ</DropdownMenuItem>
-                                                                    {!row.isDraft && (<DropdownMenuItem onClick={() => deleteBill(row._id)} className="rounded-lg text-rose-600"><MoreHorizontal size={14} className="mr-2" /> ลบบิล</DropdownMenuItem>)}
+                                                                    {row.status !== 'ยังไม่ออกบิล' && row.status !== 'ชำระแล้ว' && (
+                                                                        <DropdownMenuItem onClick={async () => { await deleteBill(row._id || row.id); if (fetchData) await fetchData(); }} className="rounded-lg text-rose-600">
+                                                                            <Trash2 size={14} className="mr-2" /> ยกเลิกและออกบิลใหม่
+                                                                        </DropdownMenuItem>
+                                                                    )}
+                                                                    {!row.isDraft && row.status === 'ชำระแล้ว' && (
+                                                                        <DropdownMenuItem onClick={() => deleteBill(row._id || row.id)} className="rounded-lg text-rose-600">
+                                                                            <Trash2 size={14} className="mr-2" /> ลบบิล
+                                                                        </DropdownMenuItem>
+                                                                    )}
                                                                 </DropdownMenuContent>
                                                             </DropdownMenu>
                                                         </TableCell>
@@ -571,6 +702,83 @@ export default function Billing() {
                     </AnimatePresence>
                 </div>
             </Tabs>
+            <Dialog open={isBulkDialogOpen} onOpenChange={setIsBulkDialogOpen}>
+                <DialogContent className="bg-white rounded-3xl p-8 border-none shadow-xl max-w-md">
+                    {bulkStep === 'confirm' && (
+                        <>
+                            <DialogHeader>
+                                <DialogTitle className="text-2xl font-bold flex items-center gap-2">
+                                    <Save className="text-indigo-600" /> ยืนยันการออกบิล
+                                </DialogTitle>
+                                <DialogDescription className="text-slate-500 pt-2 text-base">
+                                    คุณต้องการบันทึกและออกบิลทั้งหมดจำนวน <span className="font-bold text-slate-900">{filteredBilling.filter(b => b.status !== 'ชำระแล้ว').length} รายการ</span> ใช่หรือไม่?
+                                </DialogDescription>
+                            </DialogHeader>
+                            <DialogFooter className="flex gap-3 mt-8">
+                                <Button variant="outline" onClick={() => setIsBulkDialogOpen(false)} className="flex-1 h-11 rounded-xl border-slate-200 font-bold text-slate-600">ยกเลิก</Button>
+                                <Button onClick={handleCalculateAll} className="flex-1 h-11 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-lg shadow-indigo-200">ยืนยันบันทึก</Button>
+                            </DialogFooter>
+                        </>
+                    )}
+
+                    {bulkStep === 'saving' && (
+                        <div className="py-10 flex flex-col items-center justify-center text-center space-y-6">
+                            <div className="relative">
+                                <div className="h-20 w-20 rounded-full border-4 border-slate-100 border-t-indigo-600 animate-spin" />
+                                <Save className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-indigo-600" size={32} />
+                            </div>
+                            <div className="w-full">
+                                <h3 className="text-xl font-bold text-slate-900">กำลังบันทึกข้อมูล...</h3>
+                                <p className="text-slate-400 mt-2">
+                                    ดำเนินการแล้ว <span className="font-bold text-indigo-600">{bulkProgress.done}</span> / {bulkProgress.total} ห้อง
+                                </p>
+                                <div className="mt-4 w-full bg-slate-100 rounded-full h-2">
+                                    <div
+                                        className="bg-indigo-600 h-2 rounded-full transition-all duration-300"
+                                        style={{ width: bulkProgress.total > 0 ? `${(bulkProgress.done / bulkProgress.total) * 100}%` : '0%' }}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {bulkStep === 'success' && (
+                        <div className="py-10 flex flex-col items-center justify-center text-center space-y-6">
+                            <div className="h-20 w-20 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-500 animate-bounce">
+                                <CheckCircle2 size={48} />
+                            </div>
+                            <div>
+                                <h3 className="text-2xl font-bold text-slate-900">บันทึกเรียบร้อย!</h3>
+                                <p className="text-slate-500 mt-2">ออกบิลทั้งหมด <span className="font-bold text-emerald-600">{filteredBilling.length}</span> รายการสำเร็จแล้ว</p>
+                            </div>
+                            <Button onClick={() => setIsBulkDialogOpen(false)} className="w-full h-11 rounded-xl bg-slate-900 text-white font-bold">ตกลง</Button>
+                        </div>
+                    )}
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={isDeleteAllDialogOpen} onOpenChange={setIsDeleteAllDialogOpen}>
+                <DialogContent className="bg-white rounded-3xl p-8 border-none shadow-2xl max-w-md">
+                    <DialogHeader>
+                        <DialogTitle className="text-2xl font-black text-slate-900 flex items-center gap-3">
+                            <Trash2 className="text-rose-600" /> ยืนยันการยกเลิกบิล
+                        </DialogTitle>
+                        <DialogDescription className="text-slate-500 pt-2 text-base">
+                            คุณต้องการยกเลิกบิลที่ออกไปแล้วทั้งหมดจำนวน <span className="font-bold text-rose-600">{filteredBilling.filter(b => b.status !== 'ยังไม่ออกบิล' && b.status !== 'ชำระแล้ว' && !b.isDraft).length} รายการ</span> ใช่หรือไม่? 
+                            <br/><br/>
+                            <span className="text-sm text-amber-600 font-medium">** บิลจะถูกลบออกจากระบบและกลับไปเป็นสถานะ "ยังไม่ออกบิล" เพื่อแก้ข้อมูลใหม่ได้</span>
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter className="flex gap-3 mt-8">
+                        <Button variant="ghost" onClick={() => setIsDeleteAllDialogOpen(false)} className="flex-1 h-12 rounded-2xl font-bold text-slate-500 hover:bg-slate-50">
+                            ย้อนกลับ
+                        </Button>
+                        <Button onClick={handleDeleteAll} className="flex-1 h-12 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white font-bold shadow-lg shadow-rose-200">
+                            ยืนยันยกเลิกทั้งหมด
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

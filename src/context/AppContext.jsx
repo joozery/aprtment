@@ -72,47 +72,48 @@ export const AppProvider = ({ children }) => {
     });
 
     // Fetch Data from API
-    useEffect(() => {
-        const fetchData = async () => {
-            try {
-                const [buildingsRes, tenantsRes, billingRes, settingsRes, roomsRes] = await Promise.all([
-                    axios.get(`${API_URL}/buildings`),
-                    axios.get(`${API_URL}/tenants`),
-                    axios.get(`${API_URL}/billing`),
-                    axios.get(`${API_URL}/settings`),
-                    axios.get(`${API_URL}/rooms`),
-                    axios.get(`${API_URL}/maintenance`),
-                ]);
+    const fetchData = async () => {
+        try {
+            const [buildingsRes, tenantsRes, billingRes, settingsRes, roomsRes, maintenanceRes] = await Promise.all([
+                axios.get(`${API_URL}/buildings`),
+                axios.get(`${API_URL}/tenants`),
+                axios.get(`${API_URL}/billing`),
+                axios.get(`${API_URL}/settings`),
+                axios.get(`${API_URL}/rooms`),
+                axios.get(`${API_URL}/maintenance`),
+            ]);
 
-                const uniqueItems = (data) => {
-                    const seen = new Set();
-                    return (data || []).reduce((acc, curr) => {
-                        const id = (curr._id || curr.id)?.toString();
-                        if (id && !seen.has(id)) {
-                            seen.add(id);
-                            acc.push({ ...curr, id });
-                        }
-                        return acc;
-                    }, []);
-                };
-
-                setBuildings(uniqueItems(buildingsRes.data.data));
-                setTenants(uniqueItems(tenantsRes.data.data));
-                setBilling(uniqueItems(billingRes.data.data));
-                setRooms(uniqueItems(roomsRes.data.data));
-                setMaintenance(uniqueItems(maintenanceRes.data.data));
-
-                if (settingsRes.data.success) {
-                    const s = settingsRes.data.data;
-                    setSettings(prev => ({ ...prev, ...(s || {}) }));
-                    if (s?.contractConfig) {
-                        setContractConfigState(s.contractConfig);
+            const uniqueItems = (data) => {
+                const seen = new Set();
+                return (data || []).reduce((acc, curr) => {
+                    const id = (curr._id || curr.id)?.toString();
+                    if (id && !seen.has(id)) {
+                        seen.add(id);
+                        acc.push({ ...curr, id });
                     }
+                    return acc;
+                }, []);
+            };
+
+            setBuildings(uniqueItems(buildingsRes.data.data));
+            setTenants(uniqueItems(tenantsRes.data.data));
+            setBilling(uniqueItems(billingRes.data.data));
+            setRooms(uniqueItems(roomsRes.data.data));
+            setMaintenance(uniqueItems(maintenanceRes.data.data));
+
+            if (settingsRes.data.success) {
+                const s = settingsRes.data.data;
+                setSettings(prev => ({ ...prev, ...(s || {}) }));
+                if (s?.contractConfig) {
+                    setContractConfigState(s.contractConfig);
                 }
-            } catch (err) {
-                console.error('Error fetching data:', err);
             }
-        };
+        } catch (err) {
+            console.error('Error fetching data:', err);
+        }
+    };
+
+    useEffect(() => {
         fetchData();
     }, []);
 
@@ -259,30 +260,52 @@ export const AppProvider = ({ children }) => {
         const electricMin = (building?.electricMin !== null && building?.electricMin !== undefined) ? building.electricMin : (settings.electricMin ?? 200);
         const serviceFee = (building?.serviceFee !== null && building?.serviceFee !== undefined) ? building.serviceFee : (settings.serviceFee ?? 200);
 
-        const waterPriceRaw = waterMeter * waterUnit;
-        const electricPriceRaw = electricMeter * electricUnit;
+        // Resolve meter units: use explicit values if passed, otherwise compute from current vs last reading
+        const prevWater = tenant.lastWaterMeter || 0;
+        const prevElec = tenant.lastElectricMeter || 0;
+        const resolvedCurrentWater = currentWater !== undefined ? parseFloat(currentWater) : prevWater;
+        const resolvedCurrentElec = currentElectric !== undefined ? parseFloat(currentElectric) : prevElec;
+
+        const resolvedWaterUnits = waterMeter !== undefined ? parseFloat(waterMeter) : Math.max(0, resolvedCurrentWater - prevWater);
+        const resolvedElecUnits = electricMeter !== undefined ? parseFloat(electricMeter) : Math.max(0, resolvedCurrentElec - prevElec);
+
+        const waterPriceRaw = resolvedWaterUnits * waterUnit;
+        const electricPriceRaw = resolvedElecUnits * electricUnit;
 
         const waterPrice = Math.max(waterPriceRaw, waterMin);
         const electricPrice = Math.max(electricPriceRaw, electricMin);
 
-        const total = (tenant.rent || 4500) + waterPrice + electricPrice + serviceFee;
+        const total = (tenant.rent || 0) + waterPrice + electricPrice + serviceFee;
 
-        // Mock Dates: 25th last month to 25th this month
+        // Force recalculate dates based on TODAY's date (April) to get NEXT MONTH (May)
         const today = new Date();
-        const lastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 25);
-        const thisMonth = new Date(today.getFullYear(), today.getMonth(), 25);
-        const dateOptions = { day: 'numeric', month: 'short', year: '2-digit' };
+        const nextMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+        const nextMonthEnd = new Date(today.getFullYear(), today.getMonth() + 2, 0);
+        
+        const currentMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+        const currentMonthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+
+        const pad = (n) => n.toString().padStart(2, '0');
+        const getYBE = (d) => (d.getFullYear() + 543).toString().slice(-2); // Get 69 for 2569
+        
+        const nextMonthStartStr = `${pad(nextMonth.getDate())}/${pad(nextMonth.getMonth() + 1)}/${getYBE(nextMonth)} 00:00`;
+        const nextMonthEndStr = `${pad(nextMonthEnd.getDate())}/${pad(nextMonthEnd.getMonth() + 1)}/${getYBE(nextMonthEnd)} 23:59`;
+        
+        const currentMonthStartStr = `${pad(currentMonth.getDate())}/${pad(currentMonth.getMonth() + 1)}/${getYBE(currentMonth)} 00:00`;
+        const currentMonthEndStr = `${pad(currentMonthEnd.getDate())}/${pad(currentMonthEnd.getMonth() + 1)}/${getYBE(currentMonthEnd)} 23:59`;
 
         const newBillData = {
             room,
-            water: waterMeter,
-            electric: electricMeter,
+            water: resolvedWaterUnits,
+            electric: resolvedElecUnits,
             total,
             status: 'รอการชำระ',
-            dateStart: lastMonth.toLocaleDateString('th-TH', dateOptions),
-            dateEnd: thisMonth.toLocaleDateString('th-TH', dateOptions),
-            currentWater,
-            currentElectric
+            dateStart: nextMonthStartStr, 
+            dateEnd: nextMonthEndStr,
+            meterPeriodStart: currentMonthStartStr,
+            meterPeriodEnd: currentMonthEndStr,
+            currentWater: resolvedCurrentWater,
+            currentElectric: resolvedCurrentElec
         };
 
         try {
@@ -483,6 +506,7 @@ export const AppProvider = ({ children }) => {
             settings, updateSettings,
             rooms, getRoomsByBuilding,
             getAllRooms,
+            fetchData,
 
             // Tenants
             tenants, addTenant, removeTenant, updateTenant, bulkImportTenants, clearBuildingData,

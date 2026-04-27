@@ -100,8 +100,14 @@ export default function ReceiptView() {
 
     const today = new Date();
     const printDate = `${today.getDate().toString().padStart(2, '0')}/${(today.getMonth() + 1).toString().padStart(2, '0')}/${(today.getFullYear() + 543).toString().slice(-2)} ${today.getHours().toString().padStart(2, '0')}:${today.getMinutes().toString().padStart(2, '0')}`;
-    const serviceStart = `01/${(today.getMonth()).toString().padStart(2, '0')}/${(today.getFullYear() + 543).toString().slice(-2)} 00:00`;
-    const serviceEnd = `30/${(today.getMonth()).toString().padStart(2, '0')}/${(today.getFullYear() + 543).toString().slice(-2)} 23:59`;
+    
+    // Service Period (Rent) -> Next Month (Prepaid)
+    const serviceStart = bill.dateStart || `01/${(today.getMonth() + 2).toString().padStart(2, '0')}/${(today.getFullYear() + 543).toString().slice(-2)} 00:00`;
+    const serviceEnd = bill.dateEnd || `${new Date(today.getFullYear(), today.getMonth() + 2, 0).getDate()}/${(today.getMonth() + 2).toString().padStart(2, '0')}/${(today.getFullYear() + 543).toString().slice(-2)} 23:59`;
+
+    // Utility Period -> Current Month
+    const utilityPeriodStart = bill.meterPeriodStart || `01/${(today.getMonth() + 1).toString().padStart(2, '0')}/${(today.getFullYear() + 543).toString().slice(-2)} 00:00`;
+    const utilityPeriodEnd = bill.meterPeriodEnd || `${new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate()}/${(today.getMonth() + 1).toString().padStart(2, '0')}/${(today.getFullYear() + 543).toString().slice(-2)} 23:59`;
 
     return (
         <div className="min-h-screen bg-gray-100 py-8 px-4 font-sans">
@@ -128,7 +134,7 @@ export default function ReceiptView() {
                 {`
                     @import url('https://fonts.googleapis.com/css2?family=Sarabun:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap');
                     @media print {
-                        @page { size: auto !important; margin: 10mm !important; }
+                        @page { size: auto !important; margin: 5mm 10mm !important; }
                         table, th, td, tr {
                             color: black !important;
                         }
@@ -167,7 +173,7 @@ export default function ReceiptView() {
                             width: 100% !important; 
                             max-width: none !important; 
                             margin: 0 !important; 
-                            padding: 0 8mm 0 0 !important;
+                            padding: 0 5mm 0 0 !important;
                             background: white !important;
                             box-shadow: none !important;
                             border: none !important;
@@ -232,7 +238,7 @@ export default function ReceiptView() {
                 {/* Service Period */}
                 <div className="mb-4 text-sm">
                     <span className="font-semibold mr-2">วันที่เริ่มคิดค่าบริการ</span>
-                    <span>{serviceStart} - {serviceEnd}</span>
+                    <span>{utilityPeriodStart} - {utilityPeriodEnd}</span>
                 </div>
 
                 {/* Table */}
@@ -268,7 +274,7 @@ export default function ReceiptView() {
                             <td className="border-r border-black py-2 px-3 align-top">
                                 <div className="flex items-baseline gap-2">
                                     <span className="whitespace-nowrap">ค่าไฟ</span>
-                                    <span className="text-sm text-black whitespace-nowrap">{(bill.currentElectric !== undefined && bill.electric) ? `${(parseFloat(bill.currentElectric) - bill.electric)} - ${bill.currentElectric}` : ''} &nbsp; {serviceStart} - {serviceEnd}</span>
+                                    <span className="text-sm text-black whitespace-nowrap">{(bill.currentElectric !== undefined && bill.electric) ? `${(parseFloat(bill.currentElectric) - bill.electric).toLocaleString()} - ${parseFloat(bill.currentElectric).toLocaleString()}` : ''} &nbsp; {utilityPeriodStart} - {utilityPeriodEnd}</span>
                                 </div>
                             </td>
                             <td className="border-r border-black py-2 px-3 text-right align-top">{bill.electric}</td>
@@ -282,7 +288,7 @@ export default function ReceiptView() {
                             <td className="border-r border-black py-2 px-3 align-top">
                                 <div className="flex items-baseline gap-2">
                                     <span className="whitespace-nowrap">ค่าน้ำ</span>
-                                    <span className="text-sm text-black whitespace-nowrap">{(bill.currentWater !== undefined && bill.water) ? `${(parseFloat(bill.currentWater) - bill.water)} - ${bill.currentWater}` : ''} &nbsp; {serviceStart} - {serviceEnd}</span>
+                                    <span className="text-sm text-black whitespace-nowrap">{(bill.currentWater !== undefined && bill.water) ? `${(parseFloat(bill.currentWater) - bill.water).toLocaleString()} - ${parseFloat(bill.currentWater).toLocaleString()}` : ''} &nbsp; {utilityPeriodStart} - {utilityPeriodEnd}</span>
                                 </div>
                             </td>
                             <td className="border-r border-black py-2 px-3 text-right align-top">{bill.water}</td>
@@ -291,7 +297,7 @@ export default function ReceiptView() {
                             <td className="py-2 px-3 text-right align-top">{waterTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                         </tr>
                         {/* Common Fee */}
-                        <tr className="border-b-0 h-[100px]">
+                        <tr className="border-b-0 h-[60px]">
                             <td className="border-r border-black py-2 px-3 text-center align-top">4</td>
                             <td className="border-r border-black py-2 px-3 align-top">
                                 <div className="font-normal">ค่าส่วนกลาง</div>
@@ -316,7 +322,7 @@ export default function ReceiptView() {
                 </table>
 
                 {/* Signatures */}
-                <div className="grid grid-cols-3 gap-16 mt-16 text-sm">
+                <div className="grid grid-cols-3 gap-16 mt-10 text-sm">
                     <div className="text-center">
                         <div className="border-b border-black w-full mx-auto mb-2"></div>
                         <p className="font-semibold">ผู้จัดทำ</p>

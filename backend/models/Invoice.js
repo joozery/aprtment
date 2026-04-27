@@ -47,6 +47,12 @@ const invoiceSchema = new mongoose.Schema({
     },
     dateEnd: {
         type: String
+    },
+    meterPeriodStart: {
+        type: String
+    },
+    meterPeriodEnd: {
+        type: String
     }
 }, {
     timestamps: true

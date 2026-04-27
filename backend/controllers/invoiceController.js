@@ -14,7 +14,7 @@ exports.getInvoices = async (req, res) => {
 // Create new invoice (billing) - upserts if unpaid invoice for same room/month exists
 exports.createInvoice = async (req, res) => {
     try {
-        const { room, water, electric, total, status, dateStart, dateEnd, currentWater, currentElectric } = req.body;
+        const { room, water, electric, total, status, dateStart, dateEnd, currentWater, currentElectric, meterPeriodStart, meterPeriodEnd } = req.body;
 
         const tenant = await Tenant.findOne({ room });
         if (!tenant) {
@@ -43,6 +43,8 @@ exports.createInvoice = async (req, res) => {
                 currentElectric,
                 dateStart,
                 dateEnd,
+                meterPeriodStart,
+                meterPeriodEnd,
                 status: status || existingInvoice.status,
             }, { new: true });
         } else {
@@ -57,18 +59,25 @@ exports.createInvoice = async (req, res) => {
                 status: status || 'รอการชำระ',
                 dateStart,
                 dateEnd,
+                meterPeriodStart,
+                meterPeriodEnd,
                 currentWater,
                 currentElectric
             });
         }
 
-        // Update tenant's last meters
-        if (currentWater !== undefined) tenant.lastWaterMeter = currentWater;
-        if (currentElectric !== undefined) tenant.lastElectricMeter = currentElectric;
-        await tenant.save();
+        // Update tenant's last meters (non-critical, don't let it fail the invoice creation)
+        try {
+            if (currentWater !== undefined) tenant.lastWaterMeter = currentWater;
+            if (currentElectric !== undefined) tenant.lastElectricMeter = currentElectric;
+            await tenant.save();
+        } catch (saveErr) {
+            console.error(`[WARN] Could not update tenant meters for room ${room}:`, saveErr.message);
+        }
 
         res.status(201).json({ success: true, data: invoice });
     } catch (err) {
+        console.error('[ERROR] createInvoice failed:', err.message, err.stack);
         res.status(500).json({ success: false, error: err.message });
     }
 };

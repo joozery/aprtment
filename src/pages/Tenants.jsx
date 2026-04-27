@@ -88,6 +88,7 @@ export default function Tenants() {
     const [selectedTenant, setSelectedTenant] = useState(null);
     const [isDetailOpen, setIsDetailOpen] = useState(false);
     const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+    const [isManualRoom, setIsManualRoom] = useState(false);
 
     // New state for selecting building when adding tenant
     const [filterBuildingId, setFilterBuildingId] = useState('');
@@ -121,17 +122,29 @@ export default function Tenants() {
         }
 
         const roomInfo = getRoomInfo(newTenant.room);
-        if (!roomInfo) {
-            alert('หมายเลขห้องไม่ถูกต้อง');
+        
+        // 1. Check if this room is already taken by an existing tenant (Double protection)
+        const existingTenant = tenants.find(t => String(t.room) === String(newTenant.room));
+        if (existingTenant) {
+            alert(`ไม่สามารถใช้เลขห้องนี้ได้ เนื่องจากมีผู้เช่าอยู่แล้ว: ${existingTenant.name}`);
             return;
         }
-        if (roomInfo.isOccupied) {
-            alert(`ห้อง ${newTenant.room} มีผู้เช่าอยู่แล้ว (${roomInfo.tenant.name})`);
+
+        // 2. If room exists in room database, check its occupied status
+        if (roomInfo && roomInfo.isOccupied) {
+            alert(`ห้อง ${newTenant.room} มีสถานะไม่ว่างในระบบห้องพัก`);
+            return;
+        }
+
+        // 3. Only block if NOT manual mode and room isn't found at all
+        if (!isManualRoom && !roomInfo) {
+            alert('หมายเลขห้องไม่ถูกต้อง หรือไม่มีในระบบ');
             return;
         }
 
         const res = await addTenant({
             ...newTenant,
+            buildingId: filterBuildingId,
             date: new Date().toLocaleDateString('th-TH'),
             expiry: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toLocaleDateString('th-TH')
         });
@@ -139,6 +152,7 @@ export default function Tenants() {
         if (res && res.success) {
             setIsAddOpen(false);
             setNewTenant({ room: '', name: '', rent: 4500, status: 'ปกติ' });
+            setIsManualRoom(false); // Reset to default mode
         } else {
             alert(res?.error || 'เกิดข้อผิดพลาดในการลงทะเบียนผู้เช่า');
         }
@@ -253,12 +267,34 @@ export default function Tenants() {
                                     </div>
                                 )}
                                 <div className="space-y-2">
-                                    <Label className="font-bold text-slate-700">เลขห้อง</Label>
+                                    <div className="flex justify-between items-center">
+                                        <Label className="font-bold text-slate-700">เลขห้อง</Label>
+                                        {!isEditMode && (
+                                            <Button 
+                                                variant="ghost" 
+                                                size="sm" 
+                                                onClick={() => {
+                                                    setIsManualRoom(!isManualRoom);
+                                                    setNewTenant({ ...newTenant, room: '' });
+                                                }}
+                                                className="h-7 text-[10px] font-bold text-primary hover:bg-indigo-50"
+                                            >
+                                                {isManualRoom ? 'เลือกจากห้องว่าง' : 'กรอกเลขห้องเอง'}
+                                            </Button>
+                                        )}
+                                    </div>
                                     {isEditMode ? (
                                         <Input
                                             value={newTenant.room}
                                             disabled
                                             className="h-12 rounded-xl bg-slate-50 border-none disabled:opacity-50"
+                                        />
+                                    ) : isManualRoom ? (
+                                        <Input
+                                            value={newTenant.room}
+                                            onChange={(e) => setNewTenant({ ...newTenant, room: e.target.value })}
+                                            placeholder="ระบุเลขห้อง (เช่น 101)"
+                                            className="h-12 rounded-xl bg-slate-50 border-none"
                                         />
                                     ) : (
                                         <Select
